@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Auth / Users ----------
+
+enum Role {
+  ADMIN     // full access: users, settings, all consultants/tickets
+  RECRUITER // manage consultants, tickets, resumes
+  VIEWER    // read-only, internal
+  CLIENT    // reserved for future client-facing portal
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  passwordHash  String
+  role          Role     @default(VIEWER)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  consultantsCreated Consultant[]  @relation("ConsultantCreatedBy")
+  ticketsCreated     Ticket[]      @relation("TicketCreatedBy")
+  ticketsAssigned    Ticket[]      @relation("TicketAssignedTo")
+  ticketComments     TicketComment[]
+  evaluations        Evaluation[]
+  activityLogs       ActivityLog[]
+}
+
+// ---------- Consultants ----------
+
+enum ConsultantStatus {
+  ACTIVE     // available for placement
+  BENCH      // currently unassigned, between projects
+  PLACED     // currently on a project
+  INACTIVE   // no longer with the company
+}
+
+model Consultant {
+  id               String           @id @default(cuid())
+  firstName        String
+  lastName         String
+  email            String?
+  phone            String?
+  title            String?          // e.g. "Drilling Engineer", "Wellsite Geologist"
+  yearsExperience  Int?
+  location         String?
+  status           ConsultantStatus @default(ACTIVE)
+  summary          String?          @db.Text
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  createdBy        User?            @relation("ConsultantCreatedBy", fields: [createdById], references: [id])
+  createdById      String?
+
+  keywords         ConsultantKeyword[]
+  resumes          Resume[]
+  tickets          Ticket[]
+  evaluations      Evaluation[]
+
+  @@index([status])
+  @@index([lastName, firstName])
+}
+
+// ---------- Keyword taxonomy (formations, rig types, skills, certs) ----------
+
+enum KeywordType {
+  FORMATION      // e.g. Bakken, Permian, Eagle Ford
+  RIG_TYPE       // e.g. Jackup, Semi-Submersible, Land Rig
+  SKILL          // e.g. Well Control, Directional Drilling
+  CERTIFICATION  // e.g. IWCF, API 653
+  SOFTWARE       // e.g. Petrel, Landmark, OpenWells
+}
+
+model Keyword {
+  id        String      @id @default(cuid())
+  label     String
+  type      KeywordType
+  createdAt DateTime    @default(now())
+
+  consultants ConsultantKeyword[]
+
+  @@unique([label, type])
+  @@index([type])
+}
+
+enum KeywordSource {
+  MANUAL // added by a recruiter/admin
+  PARSED // extracted automatically from a resume via Claude
+}
+
+model ConsultantKeyword {
+  consultant   Consultant    @relation(fields: [consultantId], references: [id], onDelete: Cascade)
+  consultantId String
+  keyword      Keyword       @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  keywordId    String
+  source       KeywordSource @default(MANUAL)
+  confidence   Float?        // 0-1, set when source = PARSED
+  createdAt    DateTime      @default(now())
+
+  @@id([consultantId, keywordId])
+}
+
+// ---------- Resumes ----------
+
+model Resume {
+  id           String    @id @default(cuid())
+  consultant   Consultant @relation(fields: [consultantId], references: [id], onDelete: Cascade)
+  consultantId String
+  fileName     String
+  fileUrl      String     // S3 object URL
+  rawText      String?    @db.Text
+  parsedAt     DateTime?
+  createdAt    DateTime   @default(now())
+}
+
+// ---------- Tickets ----------
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Ticket {
+  id           String         @id @default(cuid())
+  title        String
+  description  String?        @db.Text
+  status       TicketStatus   @default(OPEN)
+  priority     TicketPriority @default(MEDIUM)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  consultant   Consultant?    @relation(fields: [consultantId], references: [id])
+  consultantId String?
+
+  createdBy    User           @relation("TicketCreatedBy", fields: [createdById], references: [id])
+  createdById  String
+
+  assignedTo   User?          @relation("TicketAssignedTo", fields: [assignedToId], references: [id])
+  assignedToId String?
+
+  comments     TicketComment[]
+
+  @@index([status])
+}
+
+model TicketComment {
+  id        String   @id @default(cuid())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+}
+
+// ---------- Evaluations ----------
+
+model Evaluation {
+  id           String     @id @default(cuid())
+  consultant   Consultant @relation(fields: [consultantId], references: [id], onDelete: Cascade)
+  consultantId String
+  evaluator    User       @relation(fields: [evaluatorId], references: [id])
+  evaluatorId  String
+  score        Int        // e.g. 1-5
+  notes        String?    @db.Text
+  createdAt    DateTime   @default(now())
+}
+
+// ---------- Activity log ----------
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  action     String   // e.g. "CREATED_CONSULTANT", "UPDATED_TICKET"
+  entityType String   // e.g. "Consultant", "Ticket"
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
