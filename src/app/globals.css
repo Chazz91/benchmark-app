@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-slate-50 text-slate-900;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-heading), ui-sans-serif, system-ui;
+  font-weight: 700;
+}
+

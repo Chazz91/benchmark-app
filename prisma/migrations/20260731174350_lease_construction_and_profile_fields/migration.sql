@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "Discipline" ADD VALUE 'LEASE_CONSTRUCTION';
+ALTER TYPE "Discipline" ADD VALUE 'ALL';

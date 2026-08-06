@@ -10,10 +10,11 @@ datasource db {
 // ---------- Auth / Users ----------
 
 enum Role {
-  ADMIN     // full access: users, settings, all consultants/tickets
-  RECRUITER // manage consultants, tickets, resumes
-  VIEWER    // read-only, internal
-  CLIENT    // reserved for future client-facing portal
+  ADMIN      // full access: users, settings, all consultants/tickets
+  RECRUITER  // manage consultants, applications, ticket types
+  VIEWER     // read-only, internal
+  CONSULTANT // self-service: sees only their own profile + their own tickets
+  CLIENT     // reserved for future client-facing portal
 }
 
 model User {
@@ -26,12 +27,89 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  consultantsCreated Consultant[]  @relation("ConsultantCreatedBy")
-  ticketsCreated     Ticket[]      @relation("TicketCreatedBy")
-  ticketsAssigned    Ticket[]      @relation("TicketAssignedTo")
-  ticketComments     TicketComment[]
+  // If this user IS a consultant (self-service login), this links to their record
+  consultant    Consultant? @relation("ConsultantUser")
+
+  consultantsCreated Consultant[]     @relation("ConsultantCreatedBy")
+  applicationsReviewed Application[]  @relation("ApplicationReviewedBy")
   evaluations        Evaluation[]
+  evaluationLinksCreated EvaluationLink[]
+  teamMessages       TeamMessage[]
   activityLogs       ActivityLog[]
+}
+
+// ---------- Discipline (shared by Application, Consultant, TicketType) ----------
+
+enum Discipline {
+  DRILLING
+  COMPLETIONS
+  LEASE_CONSTRUCTION // e.g. lease site prep, roads, civil work supporting O&G operations
+  ALL                // the "applies to everything" value going forward
+  BOTH               // deprecated - kept only so existing data isn't broken; nothing new writes this
+}
+
+// ---------- Applications (public submissions, before becoming a Consultant) ----------
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model Application {
+  id               String            @id @default(cuid())
+  firstName        String
+  lastName         String
+  email            String
+  phone            String?
+  hasCanadianPassport Boolean         @default(false)
+  hasUSPassport    Boolean           @default(false)
+  discipline       Discipline
+  yearsExperience  Int?
+  title            String?           // job title parsed from their resume, e.g. "Wellsite Supervisor"
+  resumeFileName   String?
+  resumeUrl        String?
+  rawText          String?           @db.Text
+  parsedSummary    String?           @db.Text
+  // free-text elaboration when the applicant selects "Other" for a formation not in the list
+  otherFormationNotes String?        @db.Text
+  status           ApplicationStatus @default(PENDING)
+  createdAt        DateTime          @default(now())
+
+  reviewedBy       User?             @relation("ApplicationReviewedBy", fields: [reviewedById], references: [id])
+  reviewedById     String?
+  reviewedAt       DateTime?
+  rejectionReason  String?
+
+  // set once accepted, links to the Consultant record created from this application
+  consultant       Consultant?       @relation("ApplicationConsultant")
+
+  // parsed keywords, shown to reviewer before accept/reject
+  keywords         ApplicationKeyword[]
+
+  @@index([status])
+}
+
+model ApplicationKeyword {
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  applicationId String
+  keyword       Keyword     @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  keywordId     String
+  confidence    Float?
+
+  @@id([applicationId, keywordId])
+}
+
+// ---------- Invite tokens (for consultant self-signup after acceptance) ----------
+
+model InviteToken {
+  id           String   @id @default(cuid())
+  token        String   @unique
+  consultant   Consultant @relation(fields: [consultantId], references: [id], onDelete: Cascade)
+  consultantId String   @unique
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime @default(now())
 }
 
 // ---------- Consultants ----------
@@ -43,22 +121,55 @@ enum ConsultantStatus {
   INACTIVE   // no longer with the company
 }
 
+// Self-service toggle the consultant controls themselves - separate from the admin-managed
+// ConsultantStatus above, which is for internal roster categorization.
+enum WorkingStatus {
+  AVAILABLE
+  WORKING
+}
+
 model Consultant {
   id               String           @id @default(cuid())
   firstName        String
   lastName         String
-  email            String?
+  email            String?          // the email their profile/tickets are tied to; alerts go here
   phone            String?
   title            String?          // e.g. "Drilling Engineer", "Wellsite Geologist"
+  hasCanadianPassport Boolean       @default(false)
+  hasUSPassport    Boolean          @default(false)
+  discipline       Discipline       @default(ALL)
   yearsExperience  Int?
   location         String?
   status           ConsultantStatus @default(ACTIVE)
+  // self-service: the consultant sets this themselves to say if they're working or available
+  workingStatus    WorkingStatus    @default(AVAILABLE)
   summary          String?          @db.Text
+  // free-text elaboration when the consultant selected "Other" for a formation not in the taxonomy
+  otherFormationNotes String?       @db.Text
+  // self-service profile fields the consultant manages themselves
+  bio                 String?       @db.Text // short bio in their own words, separate from the AI-generated summary
+  emergencyContactName  String?
+  emergencyContactPhone String?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
   createdBy        User?            @relation("ConsultantCreatedBy", fields: [createdById], references: [id])
   createdById      String?
+
+  // the application this consultant was created from (if they came through the public apply flow)
+  application      Application?     @relation("ApplicationConsultant", fields: [applicationId], references: [id])
+  applicationId    String?          @unique
+
+  // the login this consultant uses to manage their own profile/tickets (null until they sign up)
+  user             User?            @relation("ConsultantUser", fields: [userId], references: [id])
+  userId           String?          @unique
+
+  inviteToken      InviteToken?
+  evaluationLink   EvaluationLink?
+
+  // the company this consultant is currently working for, if any (self-selected or set by staff)
+  currentClient    ClientCompany?   @relation(fields: [currentClientId], references: [id])
+  currentClientId  String?
 
   keywords         ConsultantKeyword[]
   resumes          Resume[]
@@ -72,7 +183,7 @@ model Consultant {
 // ---------- Keyword taxonomy (formations, rig types, skills, certs) ----------
 
 enum KeywordType {
-  FORMATION      // e.g. Bakken, Permian, Eagle Ford
+  FORMATION      // e.g. Montney, Duvernay, Cardium (Canadian basins)
   RIG_TYPE       // e.g. Jackup, Semi-Submersible, Land Rig
   SKILL          // e.g. Well Control, Directional Drilling
   CERTIFICATION  // e.g. IWCF, API 653
@@ -85,7 +196,8 @@ model Keyword {
   type      KeywordType
   createdAt DateTime    @default(now())
 
-  consultants ConsultantKeyword[]
+  consultants  ConsultantKeyword[]
+  applications ApplicationKeyword[]
 
   @@unique([label, type])
   @@index([type])
@@ -118,68 +230,147 @@ model Resume {
   fileUrl      String     // S3 object URL
   rawText      String?    @db.Text
   parsedAt     DateTime?
+  // true for the polished Benchmark-branded version generated from the original resume
+  isFormatted  Boolean    @default(false)
   createdAt    DateTime   @default(now())
 }
 
-// ---------- Tickets ----------
+// ---------- Ticket Types (master list of required certifications, e.g. H2S Alive) ----------
 
-enum TicketStatus {
-  OPEN
-  IN_PROGRESS
-  CLOSED
+model TicketType {
+  id          String     @id @default(cuid())
+  label       String     // e.g. "H2S Alive", "Fall Protection", "Standard First Aid"
+  discipline  Discipline @default(ALL) // which consultants this applies to
+  validMonths Int        @default(36)   // typical validity period, used as a default when adding a new ticket
+  hasExpiry   Boolean    @default(true)  // false for one-time certs with no renewal (e.g. an orientation) - those show as N/A instead of an expiry date
+  createdAt   DateTime   @default(now())
+
+  tickets              Ticket[]
+  clientRequirements   ClientTicketRequirement[]
+
+  @@unique([label])
 }
 
-enum TicketPriority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
+// ---------- Client companies (e.g. Cenovus) and their specific ticket requirements ----------
+// Different client companies can require different certifications - e.g. one client might not
+// need Fit for Work or a Driver's Abstract, while another requires everything.
+
+model ClientCompany {
+  id        String   @id @default(cuid())
+  name      String   @unique // e.g. "Cenovus"
+  createdAt DateTime @default(now())
+
+  requiredTicketTypes ClientTicketRequirement[]
+  consultantsWorkingHere Consultant[]
 }
+
+model ClientTicketRequirement {
+  client       ClientCompany @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId     String
+  ticketType   TicketType    @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+  ticketTypeId String
+  // which discipline(s) this client requires this ticket for - e.g. Cenovus requires
+  // "Well Control" for Drilling only, but "Well Servicing BOP's" for Completions only
+  discipline   Discipline    @default(ALL)
+
+  @@id([clientId, ticketTypeId])
+}
+
+// ---------- Tickets (a consultant's actual certification record, with expiry) ----------
 
 model Ticket {
-  id           String         @id @default(cuid())
-  title        String
-  description  String?        @db.Text
-  status       TicketStatus   @default(OPEN)
-  priority     TicketPriority @default(MEDIUM)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id            String     @id @default(cuid())
+  consultant    Consultant @relation(fields: [consultantId], references: [id], onDelete: Cascade)
+  consultantId  String
 
-  consultant   Consultant?    @relation(fields: [consultantId], references: [id])
-  consultantId String?
+  ticketType    TicketType @relation(fields: [ticketTypeId], references: [id])
+  ticketTypeId  String
 
-  createdBy    User           @relation("TicketCreatedBy", fields: [createdById], references: [id])
-  createdById  String
+  issueDate     DateTime
+  expiryDate    DateTime?  // null for certs with no expiry (ticketType.hasExpiry = false) - shown as N/A
+  documentUrl   String?    // uploaded proof of certification (optional)
 
-  assignedTo   User?          @relation("TicketAssignedTo", fields: [assignedToId], references: [id])
-  assignedToId String?
+  // tracks whether we've already sent the "expiring within 60 days" email
+  expiryNoticeSentAt DateTime?
+  // tracks whether we've already sent the closer "expiring within 30 days" follow-up email
+  expiryNotice30SentAt DateTime?
 
-  comments     TicketComment[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
-  @@index([status])
-}
-
-model TicketComment {
-  id        String   @id @default(cuid())
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  ticketId  String
-  author    User     @relation(fields: [authorId], references: [id])
-  authorId  String
-  body      String   @db.Text
-  createdAt DateTime @default(now())
+  @@index([expiryDate])
+  @@index([consultantId])
 }
 
 // ---------- Evaluations ----------
 
 model Evaluation {
+  id             String     @id @default(cuid())
+  consultant     Consultant @relation(fields: [consultantId], references: [id], onDelete: Cascade)
+  consultantId   String
+
+  // internal evaluator (admin/recruiter), set when evaluated from inside the app
+  evaluator      User?      @relation(fields: [evaluatorId], references: [id])
+  evaluatorId    String?
+
+  // evaluator/client info, set when submitted via a public evaluation link
+  evaluatorName      String?
+  evaluatorEmail     String?
+  evaluatorCompany   String? // "O&G Company" on the form
+  directSupervisor   String?
+  evaluatorTitle     String?
+  typeOfWork         String?
+  lengthOfWork       String?
+
+  // five rated categories, matching the official Benchmark Engineering evaluation form -
+  // each scored 1 (Poor) to 5 (Excellent), with its own optional comments
+  safetyScore              Int
+  safetyComments           String? @db.Text
+  knowledgeScore           Int
+  knowledgeComments        String? @db.Text
+  reportingScore           Int
+  reportingComments        String? @db.Text
+  professionalismScore     Int
+  professionalismComments  String? @db.Text
+  overallScore             Int
+  overallComments          String? @db.Text
+
+  wouldRecommend Boolean?
+  createdAt      DateTime @default(now())
+}
+
+// A durable shareable link admins can send to clients for evaluating a specific consultant.
+// No login required to submit through it.
+model EvaluationLink {
   id           String     @id @default(cuid())
+  token        String     @unique
   consultant   Consultant @relation(fields: [consultantId], references: [id], onDelete: Cascade)
-  consultantId String
-  evaluator    User       @relation(fields: [evaluatorId], references: [id])
-  evaluatorId  String
-  score        Int        // e.g. 1-5
-  notes        String?    @db.Text
+  consultantId String     @unique
+  createdBy    User       @relation(fields: [createdById], references: [id])
+  createdById  String
   createdAt    DateTime   @default(now())
+}
+
+// ---------- Internal team chat (staff only, not visible to consultants) ----------
+
+model TeamMessage {
+  id             String   @id @default(cuid())
+  sender         User     @relation(fields: [senderId], references: [id])
+  senderId       String
+  body           String   @db.Text
+  attachmentUrl      String? // S3 object key, if a file was attached
+  attachmentFileName String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ---------- System status (singleton row, tracks things like last cron run) ----------
+
+model SystemStatus {
+  id             String    @id @default("singleton")
+  lastCronRunAt  DateTime?
+  lastCronResult String?   @db.Text
 }
 
 // ---------- Activity log ----------
@@ -188,11 +379,12 @@ model ActivityLog {
   id         String   @id @default(cuid())
   user       User     @relation(fields: [userId], references: [id])
   userId     String
-  action     String   // e.g. "CREATED_CONSULTANT", "UPDATED_TICKET"
-  entityType String   // e.g. "Consultant", "Ticket"
+  action     String   // e.g. "CREATED_CONSULTANT", "ACCEPTED_APPLICATION"
+  entityType String   // e.g. "Consultant", "Application", "Ticket"
   entityId   String
   metadata   Json?
   createdAt  DateTime @default(now())
 
   @@index([entityType, entityId])
 }
+
