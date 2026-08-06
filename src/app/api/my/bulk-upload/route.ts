@@ -8,6 +8,7 @@ import { resolveOrCreateKeyword } from '@/lib/keywords';
 import { parseTicketDocument } from '@/lib/ticketDocumentParser';
 import { resolveTicketType } from '@/lib/resolveTicketType';
 import { isExcludedFile } from '@/lib/fileExclusion';
+import { sendBulkTicketUploadAlertEmail } from '@/lib/email';
 
 const RESUME_NAME_HINTS = ['resume', 'cv'];
 const IMAGE_OR_PDF = /\.(pdf|jpg|jpeg|png|gif|webp)$/i;
@@ -92,6 +93,8 @@ export async function POST(request: Request) {
     (f) => !resumeFileNames.has(f.name) && IMAGE_OR_PDF.test(f.name) && !isExcludedFile(f.name)
   );
 
+  const addedTicketLabels: string[] = [];
+
   for (const file of otherFiles) {
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
@@ -147,6 +150,7 @@ export async function POST(request: Request) {
           type: 'ticket',
           message: `${cert.label} — ${cert.confidence < 0.6 ? 'low confidence, please double-check dates' : 'saved'}`,
         });
+        addedTicketLabels.push(cert.label);
       }
     } catch (err) {
       results.push({ fileName: file.name, type: 'error', message: (err as Error).message });
@@ -156,6 +160,23 @@ export async function POST(request: Request) {
   const skippedForSafety = files.filter((f) => isExcludedFile(f.name) && !resumeFileNames.has(f.name));
   for (const f of skippedForSafety) {
     results.push({ fileName: f.name, type: 'skipped', message: 'Skipped for safety (sensitive filename)' });
+  }
+
+  if (addedTicketLabels.length > 0) {
+    try {
+      const admins = await prisma.user.findMany({
+        where: { role: 'ADMIN', isActive: true },
+        select: { email: true },
+      });
+      await sendBulkTicketUploadAlertEmail(
+        admins.map((a) => a.email),
+        `${consultant.firstName} ${consultant.lastName}`,
+        consultant.id,
+        addedTicketLabels
+      );
+    } catch (err) {
+      console.error('Failed to send bulk ticket upload alert email:', err);
+    }
   }
 
   return NextResponse.json({ results });

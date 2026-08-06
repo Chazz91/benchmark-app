@@ -107,3 +107,28 @@ export async function sendTicketUploadedAlertEmail(
   });
 }
 
+// One summary email for a batch of tickets added via a multi-file upload, rather than
+// spamming admins with one email per file.
+export async function sendBulkTicketUploadAlertEmail(
+  adminEmails: string[],
+  consultantName: string,
+  consultantId: string,
+  ticketLabels: string[]
+) {
+  if (adminEmails.length === 0 || ticketLabels.length === 0) return;
+
+  const itemsList = ticketLabels.map((label) => `<li>${label}</li>`).join('');
+
+  await resend.emails.send({
+    from: FROM,
+    to: adminEmails,
+    subject: `${consultantName} uploaded ${ticketLabels.length} ticket(s)`,
+    html: `
+      <p><strong>${consultantName}</strong> just uploaded multiple files, adding or updating
+      these tickets:</p>
+      <ul>${itemsList}</ul>
+      <p><a href="${APP_URL}/consultants/${consultantId}">View their profile</a></p>
+    `,
+  });
+}
+
