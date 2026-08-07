@@ -52,7 +52,7 @@ export async function GET(request: Request) {
       keywords: { include: { keyword: true } },
       currentClient: true,
     },
-    orderBy: { updatedAt: 'desc' },
+    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     take: 100,
   });
 
