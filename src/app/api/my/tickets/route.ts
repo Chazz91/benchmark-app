@@ -127,4 +127,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ticket }, { status: 201 });
 }
-

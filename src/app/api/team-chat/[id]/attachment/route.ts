@@ -20,4 +20,3 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const signedUrl = await getResumeSignedUrl(message.attachmentUrl);
   return NextResponse.redirect(signedUrl);
 }
-

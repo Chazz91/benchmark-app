@@ -74,4 +74,3 @@ export async function POST(request: Request, { params }: { params: { token: stri
 
   return NextResponse.json({ success: true });
 }
-

@@ -24,4 +24,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ token: link.token });
 }
-

@@ -125,3 +125,4 @@ New keywords are created automatically the first time Claude extracts them from 
 resume (or you can add them manually from the search page/admin), so the taxonomy
 grows on its own as you upload more resumes without needing a fixed master list up front.
 
+

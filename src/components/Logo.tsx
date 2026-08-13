@@ -34,4 +34,3 @@ export default function Logo({ variant = 'dark', showTagline = false, size = 'md
     </div>
   );
 }
-

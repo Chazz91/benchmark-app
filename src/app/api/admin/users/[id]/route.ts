@@ -28,4 +28,3 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   return NextResponse.json({ user });
 }
-

@@ -66,4 +66,3 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
-

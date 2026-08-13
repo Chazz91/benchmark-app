@@ -100,4 +100,3 @@ export async function POST(request: Request) {
     keywordsTagged: parsed.keywords.length,
   });
 }
-

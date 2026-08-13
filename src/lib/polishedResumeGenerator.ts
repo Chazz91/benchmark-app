@@ -348,4 +348,3 @@ export async function generatePolishedResume(
   const doc = buildResumeDocument(structured, ticketLabels, consultantName, consultantTitle);
   return Packer.toBuffer(doc);
 }
-

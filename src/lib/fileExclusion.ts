@@ -21,4 +21,3 @@ export function isExcludedFile(fileName: string): boolean {
 
   return false;
 }
-

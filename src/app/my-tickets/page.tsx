@@ -426,4 +426,3 @@ export default function MyTicketsPage() {
     </div>
   );
 }
-

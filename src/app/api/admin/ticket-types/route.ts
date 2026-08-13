@@ -33,4 +33,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ticketType }, { status: 201 });
 }
-

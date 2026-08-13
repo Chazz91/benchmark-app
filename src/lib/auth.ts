@@ -14,9 +14,10 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
+        twoFactorCode: { label: 'Code', type: 'text' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        if (!credentials?.email || !credentials?.password || !credentials?.twoFactorCode) return null;
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email.toLowerCase() },
@@ -26,6 +27,24 @@ export const authOptions: NextAuthOptions = {
 
         const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!isValid) return null;
+
+        // Require a valid, unused, unexpired 2FA code that was just emailed to this user -
+        // this is checked here (not just in a separate "verify" step) so there's no way to
+        // bypass 2FA even by calling this sign-in flow directly with a correct password.
+        const twoFactorRecord = await prisma.twoFactorCode.findFirst({
+          where: {
+            userId: user.id,
+            code: credentials.twoFactorCode,
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+        });
+        if (!twoFactorRecord) return null;
+
+        await prisma.twoFactorCode.update({
+          where: { id: twoFactorRecord.id },
+          data: { usedAt: new Date() },
+        });
 
         return {
           id: user.id,
@@ -67,4 +86,3 @@ export function hasRole(userRole: string | undefined, minRole: keyof typeof ROLE
   if (!userRole) return false;
   return ROLE_RANK[userRole] >= ROLE_RANK[minRole];
 }
-

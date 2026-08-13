@@ -32,4 +32,3 @@ export async function getResumeSignedUrl(key: string): Promise<string> {
   const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
   return getSignedUrl(s3, command, { expiresIn: 3600 }); // 1 hour
 }
-

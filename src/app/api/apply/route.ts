@@ -106,4 +106,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ success: true, applicationId: application.id }, { status: 201 });
 }
-

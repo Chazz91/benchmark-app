@@ -141,4 +141,3 @@ ${rawText.slice(0, 15000)}
 
   return textBlock.text.trim().replace(/^["']|["']$/g, '');
 }
-

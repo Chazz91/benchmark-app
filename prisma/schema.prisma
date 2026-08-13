@@ -36,6 +36,32 @@ model User {
   evaluationLinksCreated EvaluationLink[]
   teamMessages       TeamMessage[]
   activityLogs       ActivityLog[]
+  twoFactorCodes     TwoFactorCode[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+// ---------- Auth: 2FA codes and password reset tokens ----------
+
+model TwoFactorCode {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  code      String   // 6-digit code
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, code])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
 }
 
 // ---------- Discipline (shared by Application, Consultant, TicketType) ----------
@@ -387,4 +413,5 @@ model ActivityLog {
 
   @@index([entityType, entityId])
 }
+
 

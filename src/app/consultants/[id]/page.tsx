@@ -826,4 +826,3 @@ export default function ConsultantDetailPage() {
     </div>
   );
 }
-

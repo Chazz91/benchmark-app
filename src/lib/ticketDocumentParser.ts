@@ -110,4 +110,3 @@ Rules:
 
   return results;
 }
-

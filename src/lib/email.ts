@@ -132,3 +132,32 @@ export async function sendBulkTicketUploadAlertEmail(
   });
 }
 
+export async function sendTwoFactorCodeEmail(to: string, firstName: string, code: string) {
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `Your Benchmark Engineering sign-in code: ${code}`,
+    html: `
+      <p>Hi ${firstName},</p>
+      <p>Your sign-in verification code is:</p>
+      <p style="font-size: 32px; font-weight: bold; letter-spacing: 4px;">${code}</p>
+      <p>This code expires in 10 minutes. If you didn't try to sign in, you can safely ignore
+      this email.</p>
+    `,
+  });
+}
+
+export async function sendPasswordResetEmail(to: string, firstName: string, token: string) {
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: 'Reset your Benchmark Engineering password',
+    html: `
+      <p>Hi ${firstName},</p>
+      <p>We received a request to reset your password. Click below to set a new one:</p>
+      <p><a href="${APP_URL}/reset-password/${token}">Reset your password</a></p>
+      <p>This link expires in 1 hour. If you didn't request this, you can safely ignore this
+      email — your password won't be changed.</p>
+    `,
+  });
+}

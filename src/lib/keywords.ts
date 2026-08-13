@@ -25,4 +25,3 @@ export async function resolveOrCreateKeyword(label: string, type: KeywordType) {
   // 3. No match - create a new keyword with the label as given
   return prisma.keyword.create({ data: { label, type } });
 }
-
