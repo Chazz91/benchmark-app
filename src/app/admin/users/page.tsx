@@ -21,6 +21,10 @@ export default function AdminUsersPage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
+  const [newPasswordDraft, setNewPasswordDraft] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
 
   const load = useCallback(() => {
     fetch('/api/admin/users')
@@ -62,6 +66,33 @@ export default function AdminUsersPage() {
     });
     setTogglingId(null);
     load();
+  }
+
+  async function handleResetPassword(userId: string) {
+    if (newPasswordDraft.length < 8) {
+      setResetMessage('Password must be at least 8 characters.');
+      return;
+    }
+    setSavingPassword(true);
+    setResetMessage('');
+    const res = await fetch(`/api/admin/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newPassword: newPasswordDraft }),
+    });
+    const data = await res.json();
+    setSavingPassword(false);
+
+    if (!res.ok) {
+      setResetMessage(data.error || 'Failed to reset password');
+      return;
+    }
+    setResetMessage('Password updated — let them know their new password directly.');
+    setNewPasswordDraft('');
+    setTimeout(() => {
+      setResettingUserId(null);
+      setResetMessage('');
+    }, 2500);
   }
 
   return (
@@ -132,17 +163,57 @@ export default function AdminUsersPage() {
                   <td className="p-3">{u.role}</td>
                   <td className="p-3">{u.isActive ? 'Active' : 'Disabled'}</td>
                   <td className="p-3 text-right">
-                    <button
-                      onClick={() => handleToggleActive(u.id, u.isActive)}
-                      disabled={togglingId === u.id}
-                      className={
-                        u.isActive
-                          ? 'rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50'
-                          : 'rounded-md bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50'
-                      }
-                    >
-                      {togglingId === u.id ? '…' : u.isActive ? 'Deactivate' : 'Activate'}
-                    </button>
+                    {resettingUserId === u.id ? (
+                      <div className="flex items-center justify-end gap-2">
+                        <input
+                          type="password"
+                          value={newPasswordDraft}
+                          onChange={(e) => setNewPasswordDraft(e.target.value)}
+                          placeholder="New password"
+                          className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                        />
+                        <button
+                          onClick={() => handleResetPassword(u.id)}
+                          disabled={savingPassword}
+                          className="rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {savingPassword ? 'Saving…' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setResettingUserId(null);
+                            setNewPasswordDraft('');
+                            setResetMessage('');
+                          }}
+                          className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => setResettingUserId(u.id)}
+                          className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                        >
+                          Reset Password
+                        </button>
+                        <button
+                          onClick={() => handleToggleActive(u.id, u.isActive)}
+                          disabled={togglingId === u.id}
+                          className={
+                            u.isActive
+                              ? 'rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50'
+                              : 'rounded-md bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50'
+                          }
+                        >
+                          {togglingId === u.id ? '…' : u.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </div>
+                    )}
+                    {resettingUserId === u.id && resetMessage && (
+                      <p className="mt-1 text-xs text-slate-500">{resetMessage}</p>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -153,3 +224,5 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+
+
