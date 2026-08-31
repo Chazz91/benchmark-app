@@ -286,34 +286,57 @@ function FolderImportSection() {
 function ResumeImportSection() {
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [results, setResults] = useState<ResumeResult[] | null>(null);
+  const [progressNote, setProgressNote] = useState('');
+  const [results, setResults] = useState<ResumeResult[]>([]);
   const [summary, setSummary] = useState<{ created: number; updated: number } | null>(null);
 
   async function handleUpload() {
     if (files.length === 0) return;
     setUploading(true);
-    setResults(null);
+    setResults([]);
     setSummary(null);
 
-    const formData = new FormData();
-    files.forEach((f) => formData.append('files', f));
+    let created = 0;
+    let updated = 0;
 
-    const res = await fetch('/api/admin/import/resumes', { method: 'POST', body: formData });
-    const data = await res.json();
+    // One file, one request, one at a time - never bundles everything into a single
+    // request, so a large batch can't time out no matter how many resumes are selected.
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setProgressNote(`Processing resume ${i + 1} of ${files.length}: "${file.name}"…`);
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/admin/import/resumes/single', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.status === 'created') created++;
+        if (data.status === 'updated') updated++;
+        setResults((prev) => [...prev, data]);
+      } catch (err) {
+        setResults((prev) => [
+          ...prev,
+          { fileName: file.name, status: 'error', message: `Request failed: ${(err as Error).message}` },
+        ]);
+      }
+    }
+
+    setSummary({ created, updated });
+    setProgressNote('');
     setUploading(false);
-    setSummary({ created: data.created || 0, updated: data.updated || 0 });
-    setResults(data.results || []);
   }
 
   return (
     <div className="rounded-2xl border border-gold-400/50 bg-white p-4 shadow-sm">
       <h2 className="text-sm font-semibold text-brand-900">Bulk Resume Upload</h2>
       <p className="mt-1 text-sm text-slate-500">
-        Upload multiple resumes at once. For each one, Claude reads the resume and automatically
-        pulls out the full name, email, phone, location, title, and years of experience —
-        then creates a new consultant (or updates an existing one if the email matches an
-        existing profile) and tags every formation, rig type, skill, certification, and software
-        keyword it finds, so they're immediately toggleable in the Consultants search filters.
+        Upload multiple resumes at once. Each one is read individually - for each, Claude reads
+        the resume and automatically pulls out the full name, email, phone, location, title, and
+        years of experience — then creates a new consultant (or updates an existing one if the
+        email matches an existing profile) and tags every formation, rig type, skill,
+        certification, and software keyword it finds, so they're immediately toggleable in the
+        Consultants search filters.
       </p>
 
       <div className="mt-3">
@@ -334,8 +357,10 @@ function ResumeImportSection() {
         disabled={files.length === 0 || uploading}
         className="mt-3 rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
       >
-        {uploading ? `Processing ${files.length} resume(s)…` : 'Upload & Import'}
+        {uploading ? 'Processing…' : 'Upload & Import'}
       </button>
+
+      {progressNote && <p className="mt-3 text-sm text-slate-500">{progressNote}</p>}
 
       {summary && (
         <p className="mt-3 text-sm text-green-700">
@@ -343,7 +368,7 @@ function ResumeImportSection() {
         </p>
       )}
 
-      {results && results.length > 0 && (
+      {results.length > 0 && (
         <ul className="mt-3 max-h-64 space-y-1 overflow-y-auto text-sm">
           {results.map((r, i) => (
             <li
@@ -366,8 +391,9 @@ function ResumeImportSection() {
       )}
 
       <p className="mt-3 text-xs text-slate-400">
-        Tip: if you have a large number of resumes, upload them in batches of ~15-20 at a time
-        to stay under most hosting providers&apos; upload size limits.
+        Since every resume is now processed one at a time, a large batch will take a bit
+        longer overall, but each individual step stays fast and reliable - watch the progress
+        line above to see exactly what it's working on.
       </p>
     </div>
   );
