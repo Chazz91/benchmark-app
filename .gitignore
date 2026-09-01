@@ -9,3 +9,5 @@ dist
 rebuild*.sh
 patch*.sh
 
+.vercel
+.env*

@@ -57,7 +57,8 @@ Rules:
     messages: [
       {
         role: 'user',
-        content: [contentBlock, { type: 'text', text: prompt }],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        content: [contentBlock, { type: 'text', text: prompt }] as any,
       },
     ],
   });

@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   });
 
   for (const ticket of sixtyDayTickets) {
-    if (!ticket.consultant.email) continue;
+    if (!ticket.consultant.email || !ticket.expiryDate) continue;
     try {
       await sendTicketExpiryEmail(
         ticket.consultant.email,
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
   });
 
   for (const ticket of thirtyDayTickets) {
-    if (!ticket.consultant.email) continue;
+    if (!ticket.consultant.email || !ticket.expiryDate) continue;
     try {
       await sendTicketExpiryEmail(
         ticket.consultant.email,
