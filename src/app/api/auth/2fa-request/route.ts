@@ -32,7 +32,11 @@ export async function POST(request: Request) {
     data: { userId: user.id, code, expiresAt },
   });
 
-  await sendTwoFactorCodeEmail(user.email, user.name, code);
+  try {
+    await sendTwoFactorCodeEmail(user.email, user.name, code);
+  } catch (err) {
+    console.error('Failed to send 2FA code email:', err);
+  }
 
   return genericResponse;
 }

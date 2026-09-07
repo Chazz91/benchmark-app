@@ -1,12 +1,23 @@
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = process.env.EMAIL_FROM || 'Benchmark Engineering <onboarding@resend.dev>';
+const FROM = process.env.EMAIL_FROM || 'Benchmark Engineering Inc. <onboarding@resend.dev>';
 const APP_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+
+// Resend's SDK returns { data, error } instead of throwing on API-level failures (invalid
+// recipient, rejected key, etc.) - calling resend.emails.send() directly and ignoring the
+// result means a failed send looks identical to a successful one everywhere it's used. This
+// wrapper makes sure every email in this file actually surfaces a real error when one happens.
+async function send(params: Parameters<typeof resend.emails.send>[0]) {
+  const { error } = await resend.emails.send(params);
+  if (error) {
+    throw new Error(`Resend rejected this email: ${error.message}`);
+  }
+}
 
 export async function sendInviteEmail(to: string, firstName: string, token: string) {
   const link = `${APP_URL}/signup/${token}`;
-  await resend.emails.send({
+  await send({
     from: FROM,
     to,
     subject: 'You’re approved — set up your Benchmark Engineering profile',
@@ -30,7 +41,7 @@ export async function sendTicketExpiryEmail(
   const urgency = windowDays === 30 ? 'soon — within 30 days' : 'within 60 days';
   const subjectPrefix = windowDays === 30 ? 'Action needed soon' : 'Reminder';
 
-  await resend.emails.send({
+  await send({
     from: FROM,
     to,
     subject: `${subjectPrefix}: your ${ticketLabel} ticket expires ${formatted}`,
@@ -45,7 +56,7 @@ export async function sendTicketExpiryEmail(
 }
 
 export async function sendApplicationRejectedEmail(to: string, firstName: string, reason?: string) {
-  await resend.emails.send({
+  await send({
     from: FROM,
     to,
     subject: 'Update on your Benchmark Engineering application',
@@ -61,7 +72,7 @@ export async function sendApplicationRejectedEmail(to: string, firstName: string
 export async function sendCompleteProfileEmail(to: string, firstName: string, missingItems: string[]) {
   const itemsList = missingItems.map((item) => `<li>${item}</li>`).join('');
 
-  await resend.emails.send({
+  await send({
     from: FROM,
     to,
     subject: 'Please complete your Benchmark Engineering profile',
@@ -95,7 +106,7 @@ export async function sendTicketUploadedAlertEmail(
     ? `expiring ${expiryDate.toLocaleDateString('en-CA')}`
     : 'no expiry (N/A)';
 
-  await resend.emails.send({
+  await send({
     from: FROM,
     to: adminEmails,
     subject: `${consultantName} added/updated a ticket: ${ticketTypeLabel}`,
@@ -119,7 +130,7 @@ export async function sendBulkTicketUploadAlertEmail(
 
   const itemsList = ticketLabels.map((label) => `<li>${label}</li>`).join('');
 
-  await resend.emails.send({
+  await send({
     from: FROM,
     to: adminEmails,
     subject: `${consultantName} uploaded ${ticketLabels.length} ticket(s)`,
@@ -133,7 +144,7 @@ export async function sendBulkTicketUploadAlertEmail(
 }
 
 export async function sendTwoFactorCodeEmail(to: string, firstName: string, code: string) {
-  await resend.emails.send({
+  await send({
     from: FROM,
     to,
     subject: `Your Benchmark Engineering sign-in code: ${code}`,
@@ -148,7 +159,7 @@ export async function sendTwoFactorCodeEmail(to: string, firstName: string, code
 }
 
 export async function sendPasswordResetEmail(to: string, firstName: string, token: string) {
-  await resend.emails.send({
+  await send({
     from: FROM,
     to,
     subject: 'Reset your Benchmark Engineering password',
@@ -160,4 +171,43 @@ export async function sendPasswordResetEmail(to: string, firstName: string, toke
       email — your password won't be changed.</p>
     `,
   });
+}
+
+// Sends one message to many consultants at once via BCC, so no recipient can see who else
+// got it. Replies go straight back to the admin who actually sent it, not a shared inbox.
+// Resend caps recipients at 50 per email, so this automatically splits into batches if the
+// selected group is larger than that - nothing extra to think about as the roster grows.
+export async function sendBulkConsultantEmail(
+  recipientEmails: string[],
+  subject: string,
+  bodyText: string,
+  senderName: string,
+  senderEmail: string
+) {
+  if (recipientEmails.length === 0) return;
+
+  const bodyHtml = bodyText
+    .split('\n\n')
+    .map((para) => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+
+  const html = `
+    ${bodyHtml}
+    <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">
+      \u2014 ${senderName}, Benchmark Engineering Inc.
+    </p>
+  `;
+
+  const BATCH_SIZE = 50;
+  for (let i = 0; i < recipientEmails.length; i += BATCH_SIZE) {
+    const batch = recipientEmails.slice(i, i + BATCH_SIZE);
+    await send({
+      from: FROM,
+      to: senderEmail, // the sending admin sees a copy in their own inbox; everyone else is BCC'd
+      bcc: batch,
+      replyTo: senderEmail,
+      subject,
+      html,
+    });
+  }
 }

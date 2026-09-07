@@ -47,7 +47,11 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: 'Nothing appears to be missing from their profile' }, { status: 400 });
   }
 
-  await sendCompleteProfileEmail(consultant.email, consultant.firstName, missingItems);
+  try {
+    await sendCompleteProfileEmail(consultant.email, consultant.firstName, missingItems);
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
 
   return NextResponse.json({ success: true, missingItems });
 }

@@ -23,7 +23,11 @@ export async function POST(request: Request) {
     data: { userId: user.id, token, expiresAt },
   });
 
-  await sendPasswordResetEmail(user.email, user.name, token);
+  try {
+    await sendPasswordResetEmail(user.email, user.name, token);
+  } catch (err) {
+    console.error('Failed to send password reset email:', err);
+  }
 
   return genericResponse;
 }
