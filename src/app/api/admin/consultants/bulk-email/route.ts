@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendBulkConsultantEmail } from '@/lib/email';
+import { sendPersonalizedConsultantEmails } from '@/lib/email';
 
 // POST { consultantIds: string[], subject: string, message: string }
+// Include {name} anywhere in the subject or message and it's replaced with each recipient's
+// actual first name.
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || !['ADMIN', 'RECRUITER'].includes(session.user.role)) {
@@ -32,17 +34,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'None of the selected consultants have an email on file' }, { status: 400 });
   }
 
-  try {
-    await sendBulkConsultantEmail(
-      withEmail.map((c) => c.email as string),
-      subject.trim(),
-      message.trim(),
-      session.user.name || 'Benchmark Engineering',
-      session.user.email || 'no-reply@benchmarkeng.ca'
-    );
-  } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
-  }
+  const results = await sendPersonalizedConsultantEmails(
+    withEmail.map((c) => ({ email: c.email as string, firstName: c.firstName })),
+    subject.trim(),
+    message.trim(),
+    session.user.name || 'Benchmark Engineering',
+    session.user.email || 'no-reply@benchmarkeng.ca'
+  );
+
+  const succeeded = results.filter((r) => r.success);
+  const failed = results.filter((r) => !r.success);
 
   await prisma.activityLog.create({
     data: {
@@ -50,13 +51,15 @@ export async function POST(request: Request) {
       action: 'BULK_EMAILED_CONSULTANTS',
       entityType: 'Consultant',
       entityId: 'bulk',
-      metadata: { subject: subject.trim(), recipientCount: withEmail.length },
+      metadata: { subject: subject.trim(), recipientCount: succeeded.length, failedCount: failed.length },
     },
   });
 
   return NextResponse.json({
-    sentCount: withEmail.length,
+    sentCount: succeeded.length,
+    failed: failed.map((f) => f.email),
     skipped: withoutEmail.map((c) => `${c.firstName} ${c.lastName}`),
   });
 }
+
 

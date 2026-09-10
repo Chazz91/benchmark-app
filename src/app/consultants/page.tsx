@@ -334,7 +334,7 @@ function ComposeModal({
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<{ sentCount: number; skipped: string[] } | null>(null);
+  const [result, setResult] = useState<{ sentCount: number; failed: string[]; skipped: string[] } | null>(null);
 
   async function handleSend() {
     if (!subject.trim() || !message.trim()) {
@@ -370,9 +370,14 @@ function ComposeModal({
           <div>
             <h2 className="mb-2 text-lg font-semibold text-green-700">Sent!</h2>
             <p className="text-sm text-slate-600">
-              Your message went out to {result.sentCount} consultant(s) individually — none of
-              them can see who else received it.
+              Sent individually to {result.sentCount} consultant(s), each addressed personally —
+              none of them can see who else received it.
             </p>
+            {result.failed.length > 0 && (
+              <p className="mt-2 text-xs text-red-700">
+                Failed to send to: {result.failed.join(', ')}
+              </p>
+            )}
             {result.skipped.length > 0 && (
               <p className="mt-2 text-xs text-amber-700">
                 Skipped (no email on file): {result.skipped.join(', ')}
@@ -389,8 +394,10 @@ function ComposeModal({
           <div>
             <h2 className="mb-1 text-lg font-semibold text-brand-900">Message Selected Consultants</h2>
             <p className="mb-4 text-sm text-slate-500">
-              Sending to {consultants.length} consultant(s), individually — no one will see who
-              else got this. Replies will come straight to your own inbox.
+              Sending to {consultants.length} consultant(s) individually, each their own email —
+              no one will see who else got this. Type <span className="font-mono text-brand-700">{'{name}'}</span> anywhere
+              and it'll be swapped for each person's actual first name. Replies come straight to
+              your own inbox.
             </p>
             <div className="space-y-3">
               <div>
@@ -409,7 +416,7 @@ function ComposeModal({
                   onChange={(e) => setMessage(e.target.value)}
                   rows={6}
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  placeholder="Hi everyone, just checking in..."
+                  placeholder="Hi {name}, just checking in to see how things are going..."
                 />
               </div>
               {error && <p className="text-sm text-red-600">{error}</p>}
@@ -435,3 +442,4 @@ function ComposeModal({
     </div>
   );
 }
+

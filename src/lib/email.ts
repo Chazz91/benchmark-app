@@ -173,41 +173,49 @@ export async function sendPasswordResetEmail(to: string, firstName: string, toke
   });
 }
 
-// Sends one message to many consultants at once via BCC, so no recipient can see who else
-// got it. Replies go straight back to the admin who actually sent it, not a shared inbox.
-// Resend caps recipients at 50 per email, so this automatically splits into batches if the
-// selected group is larger than that - nothing extra to think about as the roster grows.
-export async function sendBulkConsultantEmail(
-  recipientEmails: string[],
-  subject: string,
-  bodyText: string,
+// Sends a personalized message to each consultant individually - one email per person, with
+// their actual first name substituted in wherever {name} appears in the subject or message.
+// Since each email only ever lists that one person, this keeps the exact same privacy
+// guarantee as BCC (nobody sees who else got it) while actually allowing personalization,
+// which true BCC can never support - everyone in a BCC group gets an identical copy.
+export async function sendPersonalizedConsultantEmails(
+  recipients: { email: string; firstName: string }[],
+  subjectTemplate: string,
+  bodyTemplate: string,
   senderName: string,
   senderEmail: string
 ) {
-  if (recipientEmails.length === 0) return;
+  const results: { email: string; success: boolean; error?: string }[] = [];
 
-  const bodyHtml = bodyText
-    .split('\n\n')
-    .map((para) => `<p>${para.replace(/\n/g, '<br>')}</p>`)
-    .join('');
+  for (const recipient of recipients) {
+    const personalize = (text: string) => text.replace(/\{\s*name\s*\}/gi, recipient.firstName);
 
-  const html = `
-    ${bodyHtml}
-    <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">
-      \u2014 ${senderName}, Benchmark Engineering Inc.
-    </p>
-  `;
+    const subject = personalize(subjectTemplate);
+    const bodyHtml = personalize(bodyTemplate)
+      .split('\n\n')
+      .map((para) => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+      .join('');
 
-  const BATCH_SIZE = 50;
-  for (let i = 0; i < recipientEmails.length; i += BATCH_SIZE) {
-    const batch = recipientEmails.slice(i, i + BATCH_SIZE);
-    await send({
-      from: FROM,
-      to: senderEmail, // the sending admin sees a copy in their own inbox; everyone else is BCC'd
-      bcc: batch,
-      replyTo: senderEmail,
-      subject,
-      html,
-    });
+    const html = `
+      ${bodyHtml}
+      <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">
+        — ${senderName}, Benchmark Engineering Inc.
+      </p>
+    `;
+
+    try {
+      await send({ from: FROM, to: recipient.email, replyTo: senderEmail, subject, html });
+      results.push({ email: recipient.email, success: true });
+    } catch (err) {
+      // One bad address shouldn't block everyone else in the group from getting theirs.
+      results.push({ email: recipient.email, success: false, error: (err as Error).message });
+    }
+
+    // Small pause between sends to stay comfortably under Resend's rate limits when
+    // messaging a larger group - has no noticeable effect on how fast this feels to use.
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
+
+  return results;
 }
+
