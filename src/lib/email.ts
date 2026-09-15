@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+console.log('RESEND_API_KEY present:', !!process.env.RESEND_API_KEY, 'length:', process.env.RESEND_API_KEY?.length);
 const FROM = process.env.EMAIL_FROM || 'Benchmark Engineering Inc. <onboarding@resend.dev>';
 const APP_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000';
 
@@ -218,4 +219,3 @@ export async function sendPersonalizedConsultantEmails(
 
   return results;
 }
-
