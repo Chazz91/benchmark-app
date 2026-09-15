@@ -42,7 +42,7 @@ export default function NavBar() {
             <Logo />
           </Link>
           <div className="flex flex-wrap gap-1">
-            {links.map((link) => (
+            {links.map((link: { href: string; label: string }) => (
               <Link key={link.href} href={link.href} className={linkClass(link.href)}>
                 {link.label}
               </Link>
