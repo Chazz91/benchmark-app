@@ -4,8 +4,6 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import NavBar from '@/components/NavBar';
 import PageHeader from '@/components/PageHeader';
-import DashboardChatPreview from '@/components/DashboardChatPreview';
-
 function StatIcon({ path }: { path: string }) {
   return (
     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-800">
@@ -75,7 +73,6 @@ export default async function DashboardPage() {
             </a>
           ))}
         </div>
-        <DashboardChatPreview />
       </main>
     </div>
   );
