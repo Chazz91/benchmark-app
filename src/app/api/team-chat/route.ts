@@ -53,15 +53,28 @@ export async function POST(request: Request) {
     attachmentFileName = file.name;
   }
 
-  const message = await prisma.teamMessage.create({
-    data: {
-      senderId: session.user.id,
-      body: body.trim() || (attachmentFileName ? `Sent a file: ${attachmentFileName}` : ''),
-      attachmentUrl,
-      attachmentFileName,
-    },
-    include: { sender: { select: { id: true, name: true } } },
-  });
+  const messageData = {
+    senderId: session.user.id,
+    body: body.trim() || (attachmentFileName ? `Sent a file: ${attachmentFileName}` : ''),
+    attachmentUrl,
+    attachmentFileName,
+  };
+
+  let message;
+  try {
+    message = await prisma.teamMessage.create({
+      data: messageData,
+      include: { sender: { select: { id: true, name: true } } },
+    });
+  } catch (err) {
+    // Neon's serverless connection occasionally drops after being idle - one immediate retry
+    // resolves it almost every time, since the pool discards the bad connection automatically.
+    console.error('First attempt to save chat message failed, retrying once:', err);
+    message = await prisma.teamMessage.create({
+      data: messageData,
+      include: { sender: { select: { id: true, name: true } } },
+    });
+  }
 
   return NextResponse.json({ message }, { status: 201 });
 }
