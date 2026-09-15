@@ -15,8 +15,7 @@ export default function NavBar() {
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/consultants', label: 'Consultants' },
     { href: '/admin/applications', label: 'Applications' },
-    { href: '/admin/evaluations', label: 'Evaluations' },
-    ,
+        { href: '/admin/evaluations', label: 'Evaluations' },
   ];
 
   const consultantLinks = [
