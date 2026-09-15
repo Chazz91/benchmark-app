@@ -5,16 +5,15 @@ console.log('RESEND_API_KEY present:', !!process.env.RESEND_API_KEY, 'length:', 
 const FROM = process.env.EMAIL_FROM || 'Benchmark Engineering Inc. <onboarding@resend.dev>';
 const APP_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000';
 
-// Resend's SDK returns { data, error } instead of throwing on API-level failures (invalid
-// recipient, rejected key, etc.) - calling resend.emails.send() directly and ignoring the
-// result means a failed send looks identical to a successful one everywhere it's used. This
-// wrapper makes sure every email in this file actually surfaces a real error when one happens.
 async function send(params: Parameters<typeof resend.emails.send>[0]) {
+  console.log('send() called, about to call Resend API, to:', params.to);
   const { error } = await resend.emails.send(params);
+  console.log('Resend API call finished, error:', error);
   if (error) {
     throw new Error(`Resend rejected this email: ${error.message}`);
   }
 }
+  
 
 export async function sendInviteEmail(to: string, firstName: string, token: string) {
   const link = `${APP_URL}/signup/${token}`;
