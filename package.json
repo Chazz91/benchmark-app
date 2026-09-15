@@ -34,6 +34,7 @@
     "docx": "^9.1.0"
   },
   "devDependencies": {
+    "@types/ws": "^8.5.12",
     "typescript": "^5.6.2",
     "@types/node": "^22.7.4",
     "@types/react": "^18.3.10",
