@@ -1,13 +1,21 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-console.log('RESEND_API_KEY present:', !!process.env.RESEND_API_KEY, 'length:', process.env.RESEND_API_KEY?.length);
+// Constructed lazily so a missing RESEND_API_KEY only fails an actual send,
+// not `next build`'s page-data collection (which imports this module).
+let resend: Resend | undefined;
+function getResendClient(): Resend {
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
+
 const FROM = process.env.EMAIL_FROM || 'Benchmark Engineering Inc. <onboarding@resend.dev>';
 const APP_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000';
 
-async function send(params: Parameters<typeof resend.emails.send>[0]) {
+async function send(params: Parameters<InstanceType<typeof Resend>['emails']['send']>[0]) {
   console.log('send() called, about to call Resend API, to:', params.to);
-  const { error } = await resend.emails.send(params);
+  const { error } = await getResendClient().emails.send(params);
   console.log('Resend API call finished, error:', error);
   if (error) {
     throw new Error(`Resend rejected this email: ${error.message}`);
