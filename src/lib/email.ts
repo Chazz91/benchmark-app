@@ -251,7 +251,9 @@ export async function sendPersonalizedConsultantEmails(
     `;
 
     try {
-      await send({ from: FROM, to: recipient.email, replyTo: senderEmail, subject, html });
+      // Sent from the actual staff member's own @benchmarkeng.ca address (not the generic
+      // FROM) so a reply goes straight to them and looks like a real person reached out.
+      await send({ from: `${senderName} <${senderEmail}>`, to: recipient.email, subject, html });
       results.push({ email: recipient.email, success: true });
     } catch (err) {
       // One bad address shouldn't block everyone else in the group from getting theirs.
