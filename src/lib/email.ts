@@ -126,6 +126,45 @@ export async function sendTicketUploadedAlertEmail(
   });
 }
 
+export async function sendResumeUploadedAlertEmail(
+  adminEmails: string[],
+  consultantName: string,
+  consultantId: string,
+  fileName: string
+) {
+  if (adminEmails.length === 0) return;
+
+  await send({
+    from: FROM,
+    to: adminEmails,
+    subject: `${consultantName} uploaded a new resume`,
+    html: `
+      <p><strong>${consultantName}</strong> just uploaded a new resume: <strong>${fileName}</strong>.</p>
+      <p><a href="${APP_URL}/consultants/${consultantId}">View their profile</a></p>
+    `,
+  });
+}
+
+export async function sendProfileUpdatedAlertEmail(
+  adminEmails: string[],
+  consultantName: string,
+  consultantId: string,
+  changedFields: string[]
+) {
+  if (adminEmails.length === 0 || changedFields.length === 0) return;
+
+  await send({
+    from: FROM,
+    to: adminEmails,
+    subject: `${consultantName} updated their profile`,
+    html: `
+      <p><strong>${consultantName}</strong> just updated their profile — changed:</p>
+      <ul>${changedFields.map((f) => `<li>${f}</li>`).join('')}</ul>
+      <p><a href="${APP_URL}/consultants/${consultantId}">View their profile</a></p>
+    `,
+  });
+}
+
 // One summary email for a batch of tickets added via a multi-file upload, rather than
 // spamming admins with one email per file.
 export async function sendBulkTicketUploadAlertEmail(

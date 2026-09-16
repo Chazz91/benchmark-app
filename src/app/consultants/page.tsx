@@ -43,6 +43,7 @@ export default function ConsultantsPage() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [discipline, setDiscipline] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'newest' | 'updated'>('name');
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -63,12 +64,13 @@ export default function ConsultantsPage() {
     if (discipline) params.set('discipline', discipline);
     if (selected.size > 0) params.set('keywordIds', Array.from(selected).join(','));
     params.set('matchMode', matchMode);
+    params.set('sortBy', sortBy);
 
     fetch(`/api/consultants?${params.toString()}`)
       .then((r) => r.json())
       .then((d) => setConsultants(d.consultants || []))
       .finally(() => setLoading(false));
-  }, [query, status, discipline, selected, matchMode]);
+  }, [query, status, discipline, selected, matchMode, sortBy]);
 
   useEffect(() => {
     runSearch();
@@ -79,7 +81,7 @@ export default function ConsultantsPage() {
     const t = setTimeout(runSearch, 300); // debounce toggles/search
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, matchMode, status, discipline]);
+  }, [selected, matchMode, status, discipline, sortBy]);
 
   function toggleKeyword(id: string) {
     setSelected((prev) => {
@@ -200,6 +202,15 @@ export default function ConsultantsPage() {
               <option value="COMPLETIONS">Completions</option>
               <option value="LEASE_CONSTRUCTION">Lease Construction</option>
               <option value="ALL">All / Multiple</option>
+            </select>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'name' | 'newest' | 'updated')}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="name">Name (A–Z)</option>
+              <option value="newest">Recently Added</option>
+              <option value="updated">Recently Updated</option>
             </select>
             <button
               onClick={runSearch}
