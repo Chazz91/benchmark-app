@@ -1,15 +1,22 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaNeon } from '@prisma/adapter-neon';
-import { Pool, neonConfig } from '@neondatabase/serverless';
+import { neonConfig } from '@neondatabase/serverless';
 import ws from 'ws';
 
+// Node < 22 has no global WebSocket; harmless to set on newer runtimes too.
 neonConfig.webSocketConstructor = ws;
-neonConfig.poolQueryViaFetch = true;
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaNeon(pool);
+const adapter = new PrismaNeon(
+  { connectionString: process.env.DATABASE_URL },
+  {
+    // Neon's pooled connection drops WebSocket connections periodically;
+    // without these handlers an unhandled 'error' event on the pool crashes the process.
+    onPoolError: (err) => console.error('Neon pool error:', err),
+    onConnectionError: (err) => console.error('Neon connection error:', err),
+  },
+);
 
 export const prisma =
   globalForPrisma.prisma ||
