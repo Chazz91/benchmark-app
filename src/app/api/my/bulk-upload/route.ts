@@ -162,6 +162,13 @@ export async function POST(request: Request) {
     results.push({ fileName: f.name, type: 'skipped', message: 'Skipped for safety (sensitive filename)' });
   }
 
+  const touchedProfile = results.some((r) => r.type === 'ticket') || allResumeFiles.length > 0;
+  if (touchedProfile) {
+    // Bump updatedAt so this activity shows up under "Recently Updated" sorting, even though
+    // no individual Consultant field necessarily changed (e.g. a duplicate ticket document).
+    await prisma.consultant.update({ where: { id: consultant.id }, data: {} });
+  }
+
   if (addedTicketLabels.length > 0) {
     try {
       const admins = await prisma.user.findMany({

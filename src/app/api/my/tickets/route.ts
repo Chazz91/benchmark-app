@@ -107,6 +107,10 @@ export async function POST(request: Request) {
         },
       });
 
+  // Bump updatedAt so this shows up under "Recently Updated" sorting on the consultants page,
+  // even though no Consultant field itself changed.
+  await prisma.consultant.update({ where: { id: consultant.id }, data: {} });
+
   // Let admins know a consultant just added/updated a ticket, so they can spot-check it
   try {
     const admins = await prisma.user.findMany({

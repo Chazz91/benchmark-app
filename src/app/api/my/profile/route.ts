@@ -2,6 +2,18 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { sendProfileUpdatedAlertEmail } from '@/lib/email';
+
+const FIELD_LABELS: Record<string, string> = {
+  workingStatus: 'Working Status',
+  currentClientId: 'Current Client',
+  phone: 'Phone',
+  email: 'Email',
+  location: 'Location',
+  bio: 'Bio',
+  emergencyContactName: 'Emergency Contact Name',
+  emergencyContactPhone: 'Emergency Contact Phone',
+};
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -86,6 +98,29 @@ export async function POST(request: Request) {
     where: { id: consultant.id },
     data,
   });
+
+  const changedFieldLabels = Object.keys(data)
+    .filter((key) => key !== 'currentClientId') // just a side effect of workingStatus, not its own field
+    .map((key) => FIELD_LABELS[key])
+    .filter(Boolean);
+
+  if (changedFieldLabels.length > 0) {
+    try {
+      const admins = await prisma.user.findMany({
+        where: { role: 'ADMIN', isActive: true },
+        select: { email: true },
+      });
+      await sendProfileUpdatedAlertEmail(
+        admins.map((a) => a.email),
+        `${consultant.firstName} ${consultant.lastName}`,
+        consultant.id,
+        changedFieldLabels
+      );
+    } catch (err) {
+      console.error('Failed to send profile-updated alert email:', err);
+      // Don't fail the profile save just because the notification email failed
+    }
+  }
 
   return NextResponse.json({ consultant: updated });
 }

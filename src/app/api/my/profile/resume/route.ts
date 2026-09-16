@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { uploadResumeFile } from '@/lib/storage';
 import { extractTextFromFile, parseResumeText } from '@/lib/resumeParser';
 import { resolveOrCreateKeyword } from '@/lib/keywords';
+import { sendResumeUploadedAlertEmail } from '@/lib/email';
 
 // POST multipart/form-data: { file }
 // Consultant-only self-service resume upload. Same pipeline as the admin/import version:
@@ -40,6 +41,26 @@ export async function POST(request: Request) {
       parsedAt: new Date(),
     },
   });
+
+  // Bump updatedAt so this shows up under "Recently Updated" sorting on the consultants page,
+  // even if none of the auto-fill-when-blank fields below end up changing.
+  await prisma.consultant.update({ where: { id: consultant.id }, data: {} });
+
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN', isActive: true },
+      select: { email: true },
+    });
+    await sendResumeUploadedAlertEmail(
+      admins.map((a) => a.email),
+      `${consultant.firstName} ${consultant.lastName}`,
+      consultant.id,
+      file.name
+    );
+  } catch (err) {
+    console.error('Failed to send resume-uploaded alert email:', err);
+    // Don't fail the resume save just because the notification email failed
+  }
 
   try {
     const parsed = await parseResumeText(rawText);
