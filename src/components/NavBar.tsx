@@ -71,8 +71,8 @@ export default function NavBar() {
         </div>
         <div className="flex items-center gap-3 text-sm text-slate-600">
           <span className="hidden sm:inline">{session?.user?.name}</span>
-          <Link href="/add-to-phone" className="hidden text-xs text-slate-500 hover:text-brand-700 sm:inline">
-            📱 Add to phone
+          <Link href="/add-to-phone" className="text-xs text-slate-500 hover:text-brand-700">
+            📱 <span className="hidden sm:inline">Add to phone</span>
           </Link>
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
