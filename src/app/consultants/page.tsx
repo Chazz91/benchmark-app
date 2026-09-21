@@ -36,10 +36,14 @@ const TYPE_LABELS: Record<KeywordType, string> = {
   SOFTWARE: 'Software',
 };
 
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
 export default function ConsultantsPage() {
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [matchMode, setMatchMode] = useState<'any' | 'all'>('any');
+  const [keywordFilter, setKeywordFilter] = useState('');
+  const [openCategories, setOpenCategories] = useState<Set<KeywordType>>(new Set());
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [discipline, setDiscipline] = useState('');
@@ -91,6 +95,18 @@ export default function ConsultantsPage() {
     });
   }
 
+  function toggleCategory(type: KeywordType) {
+    setOpenCategories((prev) => {
+      const next = new Set(prev);
+      next.has(type) ? next.delete(type) : next.add(type);
+      return next;
+    });
+  }
+
+  function jumpToLetter(letter: string) {
+    document.getElementById(`consultant-letter-${letter}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function toggleChecked(id: string) {
     setCheckedIds((prev) => {
       const next = new Set(prev);
@@ -111,6 +127,16 @@ export default function ConsultantsPage() {
     (acc[kw.type] ||= []).push(kw);
     return acc;
   }, {});
+
+  const filterActive = keywordFilter.trim().length > 0;
+  const matchesFilter = (label: string) => label.toLowerCase().includes(keywordFilter.trim().toLowerCase());
+
+  // Letters present at the start of each consultant's last name, in the order they first
+  // appear - only meaningful while sorted by name, which is when the jump strip is shown.
+  const lettersPresent = new Set(
+    sortBy === 'name' ? consultants.map((c) => c.lastName[0]?.toUpperCase()).filter(Boolean) : []
+  );
+  const seenLetters = new Set<string>();
 
   return (
     <div>
@@ -138,30 +164,59 @@ export default function ConsultantsPage() {
               </div>
             </div>
 
-            {Object.entries(TYPE_LABELS).map(([type, label]) => (
-              <div key={type} className="mb-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {(grouped[type] || []).map((kw) => (
-                    <button
-                      key={kw.id}
-                      onClick={() => toggleKeyword(kw.id)}
-                      className={clsx(
-                        'rounded-full border px-2.5 py-1 text-xs',
-                        selected.has(kw.id)
-                          ? 'border-gold-500 bg-gold-500 text-brand-900'
-                          : 'border-slate-300 text-slate-600 hover:border-brand-600'
+            <input
+              value={keywordFilter}
+              onChange={(e) => setKeywordFilter(e.target.value)}
+              placeholder="Filter keywords…"
+              className="mb-4 w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs focus:border-brand-600 focus:outline-none"
+            />
+
+            {Object.entries(TYPE_LABELS).map(([type, label]) => {
+              const all = grouped[type] || [];
+              const visible = filterActive ? all.filter((kw) => matchesFilter(kw.label)) : all;
+              if (filterActive && visible.length === 0) return null;
+
+              const selectedCount = all.filter((kw) => selected.has(kw.id)).length;
+              const isOpen = filterActive || openCategories.has(type as KeywordType);
+
+              return (
+                <div key={type} className="mb-2 border-b border-slate-100 pb-2 last:border-0">
+                  <button
+                    onClick={() => toggleCategory(type as KeywordType)}
+                    className="flex w-full items-center justify-between py-1 text-left"
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {label}
+                      {selectedCount > 0 && (
+                        <span className="ml-1.5 rounded-full bg-gold-500 px-1.5 py-0.5 text-[10px] font-bold text-brand-900">
+                          {selectedCount}
+                        </span>
                       )}
-                    >
-                      {kw.label}
-                    </button>
-                  ))}
-                  {(grouped[type] || []).length === 0 && (
-                    <p className="text-xs text-slate-400">None yet</p>
+                    </span>
+                    <span className="text-xs text-slate-400">{isOpen ? '−' : '+'}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {visible.map((kw) => (
+                        <button
+                          key={kw.id}
+                          onClick={() => toggleKeyword(kw.id)}
+                          className={clsx(
+                            'rounded-full border px-2.5 py-1 text-xs',
+                            selected.has(kw.id)
+                              ? 'border-gold-500 bg-gold-500 text-brand-900'
+                              : 'border-slate-300 text-slate-600 hover:border-brand-600'
+                          )}
+                        >
+                          {kw.label}
+                        </button>
+                      ))}
+                      {visible.length === 0 && <p className="text-xs text-slate-400">None yet</p>}
+                    </div>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {selected.size > 0 && (
               <button onClick={() => setSelected(new Set())} className="text-xs text-brand-700 hover:underline">
@@ -172,7 +227,8 @@ export default function ConsultantsPage() {
         </aside>
 
         {/* Results */}
-        <section className="flex-1">
+        <section className="flex-1 lg:flex lg:gap-4">
+        <div className="flex-1">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row">
             <input
               value={query}
@@ -246,8 +302,17 @@ export default function ConsultantsPage() {
                 )}
               </div>
 
-              {consultants.map((c) => (
-                <div key={c.id} className="flex items-start gap-3">
+              {consultants.map((c) => {
+                const letter = c.lastName[0]?.toUpperCase();
+                const isFirstForLetter = letter && !seenLetters.has(letter);
+                if (isFirstForLetter) seenLetters.add(letter);
+
+                return (
+                <div
+                  key={c.id}
+                  id={isFirstForLetter ? `consultant-letter-${letter}` : undefined}
+                  className="flex items-start gap-3 scroll-mt-4"
+                >
                   <input
                     type="checkbox"
                     checked={checkedIds.has(c.id)}
@@ -312,9 +377,33 @@ export default function ConsultantsPage() {
                     )}
                   </Link>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
+        </div>
+
+        {sortBy === 'name' && consultants.length > 0 && (
+          <div className="mt-4 hidden shrink-0 lg:mt-0 lg:block">
+            <div className="sticky top-4 flex flex-col items-center gap-0.5 rounded-full border border-slate-200 bg-white px-1 py-2 shadow-sm">
+              {ALPHABET.map((letter) => (
+                <button
+                  key={letter}
+                  onClick={() => jumpToLetter(letter)}
+                  disabled={!lettersPresent.has(letter)}
+                  className={clsx(
+                    'flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold',
+                    lettersPresent.has(letter)
+                      ? 'text-brand-700 hover:bg-gold-500 hover:text-brand-900'
+                      : 'text-slate-300'
+                  )}
+                >
+                  {letter}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         </section>
       </main>
 
