@@ -29,6 +29,7 @@ interface EvaluationEntry {
 }
 
 interface ConsultantProfile {
+  id: string;
   firstName: string;
   lastName: string;
   email: string | null;
@@ -41,6 +42,9 @@ interface ConsultantProfile {
   currentClientId: string | null;
   resumes: ResumeEntry[];
   evaluations: EvaluationEntry[];
+  serviceOrderSheetFileName: string | null;
+  serviceOrderSheetStartDate: string | null;
+  serviceOrderSheetEndDate: string | null;
 }
 
 export default function MyProfilePage() {
@@ -220,6 +224,31 @@ export default function MyProfilePage() {
             </div>
           )}
         </div>
+
+        {/* Service order sheet */}
+        {profile.serviceOrderSheetFileName && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <h2 className="mb-1 text-sm font-semibold text-slate-800">Service Order Sheet</h2>
+            <p className="mb-3 text-xs text-slate-500">Uploaded by your admin — for your reference.</p>
+            <a
+              href={`/api/consultants/${profile.id}/service-order-sheet`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-brand-700 hover:underline"
+            >
+              {profile.serviceOrderSheetFileName}
+            </a>
+            {(profile.serviceOrderSheetStartDate || profile.serviceOrderSheetEndDate) && (
+              <p className="mt-1 text-xs text-slate-500">
+                {profile.serviceOrderSheetStartDate &&
+                  new Date(profile.serviceOrderSheetStartDate).toLocaleDateString('en-CA')}
+                {profile.serviceOrderSheetStartDate && profile.serviceOrderSheetEndDate && ' – '}
+                {profile.serviceOrderSheetEndDate &&
+                  new Date(profile.serviceOrderSheetEndDate).toLocaleDateString('en-CA')}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Contact info */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
