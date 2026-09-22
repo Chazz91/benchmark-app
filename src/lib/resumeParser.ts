@@ -77,6 +77,50 @@ export async function parseResumeText(resumeText: string): Promise<ParsedResume>
   }
 }
 
+export interface ServiceOrderDates {
+  startDate: string | null; // YYYY-MM-DD
+  endDate: string | null; // YYYY-MM-DD
+}
+
+// Pulls the effective start/end dates out of a service order sheet's "Term" section
+// (e.g. Cenovus service orders: "this Service Order shall start on 2026-05-26 and continue
+// until 2027-05-25"). Used to auto-fill the date fields when one is uploaded, so staff don't
+// have to retype dates that are already sitting in the document.
+export async function extractServiceOrderDates(text: string): Promise<ServiceOrderDates> {
+  const prompt = `Find the effective start and end dates in this service order / contract
+document (usually in a "Term" section, e.g. "this Service Order shall start on 2026-05-26 and
+continue until 2027-05-25"). Return ONLY a JSON object, no markdown fences, no preamble:
+
+{ "startDate": "YYYY-MM-DD" | null, "endDate": "YYYY-MM-DD" | null }
+
+If a date isn't clearly present, use null rather than guessing.
+
+Document text:
+"""
+${text.slice(0, 15000)}
+"""`;
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 200,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const textBlock = response.content.find((b) => b.type === 'text');
+  if (!textBlock || textBlock.type !== 'text') {
+    throw new Error('No response from service order date extraction');
+  }
+
+  const cleaned = textBlock.text.replace(/```json|```/g, '').trim();
+
+  try {
+    const parsed = JSON.parse(cleaned) as ServiceOrderDates;
+    return { startDate: parsed.startDate || null, endDate: parsed.endDate || null };
+  } catch (err) {
+    throw new Error(`Failed to parse service order date extraction response: ${(err as Error).message}`);
+  }
+}
+
 // Extract raw text from an uploaded file buffer based on its type.
 export async function extractTextFromFile(buffer: Buffer, mimeType: string): Promise<string> {
   let text: string;

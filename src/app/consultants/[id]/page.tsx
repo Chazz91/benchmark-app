@@ -99,6 +99,7 @@ export default function ConsultantDetailPage() {
   const [sosUploading, setSosUploading] = useState(false);
   const [sosMessage, setSosMessage] = useState('');
   const [sosDeleting, setSosDeleting] = useState(false);
+  const [sosParsingDates, setSosParsingDates] = useState(false);
 
   const load = useCallback(() => {
     fetch(`/api/consultants/${id}`)
@@ -286,6 +287,31 @@ export default function ConsultantDetailPage() {
       load();
     } else {
       setBulkResults([{ fileName: '', type: 'error', message: data.error || 'Upload failed' }]);
+    }
+  }
+
+  async function handleSosFileSelected(file: File | null) {
+    setSosFile(file);
+    if (!file) return;
+
+    setSosParsingDates(true);
+    setSosMessage('Reading dates from the document…');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/admin/service-order-sheet/parse-dates', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.startDate) setSosStartDate(data.startDate);
+      if (data.endDate) setSosEndDate(data.endDate);
+      setSosMessage(
+        data.startDate || data.endDate
+          ? 'Dates filled in from the document — double-check them below before uploading.'
+          : "Couldn't find dates in the document — enter them manually below."
+      );
+    } catch {
+      setSosMessage("Couldn't read dates from the document — enter them manually below.");
+    } finally {
+      setSosParsingDates(false);
     }
   }
 
@@ -772,14 +798,15 @@ export default function ConsultantDetailPage() {
               <label className="mb-1 block text-xs text-slate-500">File</label>
               <input
                 type="file"
-                onChange={(e) => setSosFile(e.target.files?.[0] || null)}
+                onChange={(e) => handleSosFileSelected(e.target.files?.[0] || null)}
+                disabled={sosParsingDates}
                 className="w-full text-sm"
               />
             </div>
           </div>
           <button
             onClick={handleSosUpload}
-            disabled={!sosFile || sosUploading}
+            disabled={!sosFile || sosUploading || sosParsingDates}
             className="mt-3 rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
           >
             {sosUploading ? 'Uploading…' : consultant.serviceOrderSheetFileName ? 'Replace' : 'Upload'}
