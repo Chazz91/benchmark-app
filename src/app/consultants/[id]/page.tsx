@@ -23,6 +23,10 @@ interface ConsultantDetail {
   summary: string | null;
   otherFormationNotes: string | null;
   userId: string | null;
+  serviceOrderSheetUrl: string | null;
+  serviceOrderSheetFileName: string | null;
+  serviceOrderSheetStartDate: string | null;
+  serviceOrderSheetEndDate: string | null;
   keywords: { keyword: { id: string; label: string; type: string }; source: string; confidence: number | null }[];
   resumes: { id: string; fileName: string; createdAt: string; isFormatted: boolean }[];
   tickets: {
@@ -89,6 +93,13 @@ export default function ConsultantDetailPage() {
   const [profileLinkCopied, setProfileLinkCopied] = useState(false);
   const [copyingInvite, setCopyingInvite] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [sosFile, setSosFile] = useState<File | null>(null);
+  const [sosStartDate, setSosStartDate] = useState('');
+  const [sosEndDate, setSosEndDate] = useState('');
+  const [sosUploading, setSosUploading] = useState(false);
+  const [sosMessage, setSosMessage] = useState('');
+  const [sosDeleting, setSosDeleting] = useState(false);
+  const [sosParsingDates, setSosParsingDates] = useState(false);
 
   const load = useCallback(() => {
     fetch(`/api/consultants/${id}`)
@@ -277,6 +288,66 @@ export default function ConsultantDetailPage() {
     } else {
       setBulkResults([{ fileName: '', type: 'error', message: data.error || 'Upload failed' }]);
     }
+  }
+
+  async function handleSosFileSelected(file: File | null) {
+    setSosFile(file);
+    if (!file) return;
+
+    setSosParsingDates(true);
+    setSosMessage('Reading dates from the document…');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/admin/service-order-sheet/parse-dates', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.startDate) setSosStartDate(data.startDate);
+      if (data.endDate) setSosEndDate(data.endDate);
+      setSosMessage(
+        data.startDate || data.endDate
+          ? 'Dates filled in from the document — double-check them below before uploading.'
+          : "Couldn't find dates in the document — enter them manually below."
+      );
+    } catch {
+      setSosMessage("Couldn't read dates from the document — enter them manually below.");
+    } finally {
+      setSosParsingDates(false);
+    }
+  }
+
+  async function handleSosUpload() {
+    if (!sosFile) return;
+    setSosUploading(true);
+    setSosMessage('');
+
+    const formData = new FormData();
+    formData.append('file', sosFile);
+    if (sosStartDate) formData.append('startDate', sosStartDate);
+    if (sosEndDate) formData.append('endDate', sosEndDate);
+
+    const res = await fetch(`/api/consultants/${id}/service-order-sheet`, { method: 'POST', body: formData });
+    const data = await res.json();
+    setSosUploading(false);
+
+    if (!res.ok) {
+      setSosMessage(data.error || 'Upload failed');
+      return;
+    }
+    setSosFile(null);
+    setSosStartDate('');
+    setSosEndDate('');
+    setSosMessage('Uploaded.');
+    load();
+  }
+
+  async function handleSosDelete() {
+    const confirmed = window.confirm('Remove the service order sheet on file for this consultant?');
+    if (!confirmed) return;
+
+    setSosDeleting(true);
+    await fetch(`/api/consultants/${id}/service-order-sheet`, { method: 'DELETE' });
+    setSosDeleting(false);
+    load();
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -667,6 +738,80 @@ export default function ConsultantDetailPage() {
               })}
             </ul>
           )}
+        </div>
+
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">Service Order Sheet</h2>
+          {consultant.serviceOrderSheetFileName ? (
+            <div className="mb-3 flex items-center justify-between text-sm">
+              <span>
+                <a
+                  href={`/api/consultants/${id}/service-order-sheet`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-brand-700 hover:underline"
+                >
+                  {consultant.serviceOrderSheetFileName}
+                </a>
+                {(consultant.serviceOrderSheetStartDate || consultant.serviceOrderSheetEndDate) && (
+                  <span className="ml-2 text-xs text-slate-500">
+                    {consultant.serviceOrderSheetStartDate &&
+                      new Date(consultant.serviceOrderSheetStartDate).toLocaleDateString('en-CA')}
+                    {consultant.serviceOrderSheetStartDate && consultant.serviceOrderSheetEndDate && ' – '}
+                    {consultant.serviceOrderSheetEndDate &&
+                      new Date(consultant.serviceOrderSheetEndDate).toLocaleDateString('en-CA')}
+                  </span>
+                )}
+              </span>
+              <button
+                onClick={handleSosDelete}
+                disabled={sosDeleting}
+                className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
+              >
+                {sosDeleting ? 'Removing…' : 'Remove'}
+              </button>
+            </div>
+          ) : (
+            <p className="mb-3 text-sm text-slate-400">No service order sheet on file yet.</p>
+          )}
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">Start date (optional)</label>
+              <input
+                type="date"
+                value={sosStartDate}
+                onChange={(e) => setSosStartDate(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">End date (optional)</label>
+              <input
+                type="date"
+                value={sosEndDate}
+                onChange={(e) => setSosEndDate(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">File</label>
+              <input
+                type="file"
+                onChange={(e) => handleSosFileSelected(e.target.files?.[0] || null)}
+                disabled={sosParsingDates}
+                className="w-full text-sm"
+              />
+            </div>
+          </div>
+          <button
+            onClick={handleSosUpload}
+            disabled={!sosFile || sosUploading || sosParsingDates}
+            className="mt-3 rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
+          >
+            {sosUploading ? 'Uploading…' : consultant.serviceOrderSheetFileName ? 'Replace' : 'Upload'}
+          </button>
+          {sosMessage && <p className="mt-2 text-xs text-slate-500">{sosMessage}</p>}
         </div>
 
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">

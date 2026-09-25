@@ -175,6 +175,13 @@ model Consultant {
   bio                 String?       @db.Text // short bio in their own words, separate from the AI-generated summary
   emergencyContactName  String?
   emergencyContactPhone String?
+  // Service order sheet (e.g. from Cenovus) - just one current sheet on file, uploading a
+  // new one replaces it. Stored in S3; this holds the object key, not a public URL.
+  serviceOrderSheetUrl        String?
+  serviceOrderSheetFileName   String?
+  serviceOrderSheetStartDate  DateTime?
+  serviceOrderSheetEndDate    DateTime?
+  serviceOrderSheetUploadedAt DateTime?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
