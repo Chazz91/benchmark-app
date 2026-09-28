@@ -2,6 +2,20 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendTicketExpiryEmail } from '@/lib/email';
 
+// While rolling this feature out, TICKET_EXPIRY_ALLOWLIST restricts these emails to specific
+// consultants being tested with, instead of going out to every real consultant in the system.
+// Set it to a comma-separated list of consultant emails to test with a few people, or to "*"
+// once it's confirmed and ready for everyone. Leaving it unset sends to no one - the safe
+// default until testing is done. A skipped ticket's notice-sent flag is deliberately left
+// unset, so it's picked back up and sent for real once the allowlist opens up.
+function isAllowedRecipient(email: string): boolean {
+  const raw = process.env.TICKET_EXPIRY_ALLOWLIST;
+  if (!raw) return false;
+  if (raw.trim() === '*') return true;
+  const allowed = raw.split(',').map((e) => e.trim().toLowerCase());
+  return allowed.includes(email.toLowerCase());
+}
+
 // GET /api/cron/ticket-expiry
 // Protected by a shared secret (set CRON_SECRET in env, and Vercel Cron sends it as a header).
 // Sends TWO separate reminder emails per ticket as it approaches expiry:
@@ -20,6 +34,8 @@ export async function GET(request: Request) {
 
   let sent60 = 0;
   let sent30 = 0;
+  let skipped60 = 0;
+  let skipped30 = 0;
 
   // First window: within 60 days, no 60-day notice sent yet
   const sixtyDayTickets = await prisma.ticket.findMany({
@@ -29,6 +45,10 @@ export async function GET(request: Request) {
 
   for (const ticket of sixtyDayTickets) {
     if (!ticket.consultant.email || !ticket.expiryDate) continue;
+    if (!isAllowedRecipient(ticket.consultant.email)) {
+      skipped60++;
+      continue;
+    }
     try {
       await sendTicketExpiryEmail(
         ticket.consultant.email,
@@ -52,6 +72,10 @@ export async function GET(request: Request) {
 
   for (const ticket of thirtyDayTickets) {
     if (!ticket.consultant.email || !ticket.expiryDate) continue;
+    if (!isAllowedRecipient(ticket.consultant.email)) {
+      skipped30++;
+      continue;
+    }
     try {
       await sendTicketExpiryEmail(
         ticket.consultant.email,
@@ -67,7 +91,14 @@ export async function GET(request: Request) {
     }
   }
 
-  const result = { checked60Day: sixtyDayTickets.length, emailsSent60Day: sent60, checked30Day: thirtyDayTickets.length, emailsSent30Day: sent30 };
+  const result = {
+    checked60Day: sixtyDayTickets.length,
+    emailsSent60Day: sent60,
+    skipped60DayNotAllowlisted: skipped60,
+    checked30Day: thirtyDayTickets.length,
+    emailsSent30Day: sent30,
+    skipped30DayNotAllowlisted: skipped30,
+  };
 
   await prisma.systemStatus.upsert({
     where: { id: 'singleton' },
