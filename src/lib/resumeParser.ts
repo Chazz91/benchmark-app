@@ -30,7 +30,7 @@ Read the resume text and return ONLY a JSON object (no markdown fences, no pream
   "location": string | null,       // city and province, e.g. "Grande Prairie, AB" — if only one is present, include just that
   "title": string | null,          // e.g. "Drilling Engineer", "Wellsite Geologist"
   "yearsExperience": number | null,
-  "summary": string | null,        // 2-3 sentence professional summary, in your own words
+  "summary": string | null,        // 3-4 sentences, third person, information-dense — pull in named employers, formations, rig types, certifications, and quantified experience actually stated in the resume rather than generic filler ("skilled", "proven track record"); a shorter honest summary beats a padded vague one
   "keywords": [
     { "label": string, "type": "FORMATION" | "RIG_TYPE" | "SKILL" | "CERTIFICATION" | "SOFTWARE", "confidence": number }
   ]
@@ -160,12 +160,32 @@ export async function regenerateConsultantSummary(
   lastName: string,
   title: string | null
 ): Promise<string> {
-  const prompt = `Write a 3-5 sentence, third-person professional summary for an oil & gas
-consultant, based on their resume text below. Mention their name (${firstName} ${lastName}),
-their role${title ? ` (${title})` : ''}, years of experience, and key technical areas (specific
-formations, rig types, drilling/completions techniques, safety record) if actually mentioned in
-the resume. Confident, specific, professional tone. Never invent facts not present in the
-resume text. Return ONLY the summary paragraph - no preamble, no quotation marks, no markdown.
+  const prompt = `Write a sharp, information-dense 3-5 sentence professional summary for an oil
+& gas consultant, in the third person, based on the resume text below. This goes on a
+searchable staffing profile, so it should read like a technical recruiter wrote it - packed with
+real specifics pulled from the resume, not generic filler.
+
+Their name is ${firstName} ${lastName}${title ? `, role: ${title}` : ''}. Beyond that, pull in
+whatever of the following actually appears in the resume text:
+- Total years of experience, and/or years in specific positions
+- Names of specific employers/companies they've worked for
+- Named formations/basins worked (e.g. Montney, Duvernay, Cardium, Viking)
+- Named rig types (e.g. Pad-Walking Rig, Super-Single Rig, Service Rig)
+- Specific technical disciplines/techniques (e.g. directional drilling, SAGD, MPD, UBD, well control)
+- Named certifications actually mentioned
+- Concrete achievements or scale (number of wells, rig-years, notable projects, safety
+  record/TRIF, promotions)
+
+Rules:
+- Every claim must be directly supported by the resume text - never invent, infer, or round up
+  a number that isn't stated.
+- Prefer concrete nouns (named formations, rig types, employers, certifications, numbers) over
+  vague adjectives ("skilled", "proven track record", "excellent communicator") - only reach for
+  a vague descriptor when there's genuinely nothing concrete to say instead.
+- If the resume is thin on specifics, write a shorter, honest summary rather than padding it out
+  with generic claims.
+- Confident, professional tone. Return ONLY the summary paragraph - no preamble, no quotation
+  marks, no markdown.
 
 Resume text:
 """
