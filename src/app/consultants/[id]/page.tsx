@@ -31,6 +31,7 @@ interface ConsultantDetail {
   resumes: { id: string; fileName: string; createdAt: string; isFormatted: boolean }[];
   tickets: {
     id: string;
+    issueDate: string;
     expiryDate: string | null;
     documentUrl: string | null;
     ticketType: { label: string };
@@ -100,6 +101,12 @@ export default function ConsultantDetailPage() {
   const [sosMessage, setSosMessage] = useState('');
   const [sosDeleting, setSosDeleting] = useState(false);
   const [sosParsingDates, setSosParsingDates] = useState(false);
+  const [editingTicketId, setEditingTicketId] = useState<string | null>(null);
+  const [editIssueDate, setEditIssueDate] = useState('');
+  const [editExpiryDate, setEditExpiryDate] = useState('');
+  const [editNoExpiry, setEditNoExpiry] = useState(false);
+  const [savingTicket, setSavingTicket] = useState(false);
+  const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch(`/api/consultants/${id}`)
@@ -347,6 +354,52 @@ export default function ConsultantDetailPage() {
     setSosDeleting(true);
     await fetch(`/api/consultants/${id}/service-order-sheet`, { method: 'DELETE' });
     setSosDeleting(false);
+    load();
+  }
+
+  function startEditingTicket(ticket: ConsultantDetail['tickets'][number]) {
+    setEditingTicketId(ticket.id);
+    setEditIssueDate(ticket.issueDate.slice(0, 10));
+    setEditExpiryDate(ticket.expiryDate ? ticket.expiryDate.slice(0, 10) : '');
+    setEditNoExpiry(!ticket.expiryDate);
+  }
+
+  async function handleSaveTicket(ticketId: string) {
+    if (!editIssueDate || (!editNoExpiry && !editExpiryDate)) {
+      alert('Issue date and expiry date (or no-expiry) are required');
+      return;
+    }
+    setSavingTicket(true);
+    const res = await fetch(`/api/tickets/${ticketId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        issueDate: editIssueDate,
+        expiryDate: editNoExpiry ? null : editExpiryDate,
+        noExpiry: editNoExpiry,
+      }),
+    });
+    setSavingTicket(false);
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || 'Failed to save ticket');
+      return;
+    }
+    setEditingTicketId(null);
+    load();
+  }
+
+  async function handleDeleteTicket(ticketId: string, label: string) {
+    const confirmed = window.confirm(`Delete the ${label} ticket for this consultant? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setDeletingTicketId(ticketId);
+    const res = await fetch(`/api/tickets/${ticketId}`, { method: 'DELETE' });
+    setDeletingTicketId(null);
+    if (!res.ok) {
+      alert('Failed to delete ticket');
+      return;
+    }
     load();
   }
 
@@ -706,11 +759,65 @@ export default function ConsultantDetailPage() {
           {consultant.tickets.length === 0 ? (
             <p className="text-sm text-slate-400">No tickets on file yet.</p>
           ) : (
-            <ul className="space-y-1 text-sm">
+            <ul className="space-y-2 text-sm">
               {consultant.tickets.map((t) => {
                 const days = t.expiryDate ? daysUntil(t.expiryDate) : null;
+                const isEditing = editingTicketId === t.id;
+
+                if (isEditing) {
+                  return (
+                    <li key={t.id} className="rounded-lg border border-slate-200 p-3">
+                      <p className="mb-2 font-medium text-slate-700">{t.ticketType.label}</p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-xs text-slate-400">Issue Date</label>
+                          <input
+                            type="date"
+                            value={editIssueDate}
+                            onChange={(e) => setEditIssueDate(e.target.value)}
+                            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs text-slate-400">Expiry Date</label>
+                          <input
+                            type="date"
+                            value={editExpiryDate}
+                            onChange={(e) => setEditExpiryDate(e.target.value)}
+                            disabled={editNoExpiry}
+                            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                          />
+                        </div>
+                      </div>
+                      <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={editNoExpiry}
+                          onChange={(e) => setEditNoExpiry(e.target.checked)}
+                        />
+                        This ticket doesn&apos;t expire
+                      </label>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          onClick={() => handleSaveTicket(t.id)}
+                          disabled={savingTicket}
+                          className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {savingTicket ? 'Saving…' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => setEditingTicketId(null)}
+                          className="rounded-md bg-slate-100 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </li>
+                  );
+                }
+
                 return (
-                  <li key={t.id} className="flex items-center justify-between">
+                  <li key={t.id} className="flex items-center justify-between gap-2">
                     <span className="text-slate-700">
                       {t.ticketType.label}
                       {t.documentUrl && (
@@ -727,15 +834,30 @@ export default function ConsultantDetailPage() {
                         </>
                       )}
                     </span>
-                    {days === null ? (
-                      <span className="text-slate-400">N/A (no expiry)</span>
-                    ) : (
-                      <span className={days < 0 ? 'text-red-600' : days <= 60 ? 'text-amber-600' : 'text-slate-500'}>
-                        {days < 0
-                          ? `Expired ${new Date(t.expiryDate!).toLocaleDateString('en-CA')}`
-                          : `Expires ${new Date(t.expiryDate!).toLocaleDateString('en-CA')}`}
-                      </span>
-                    )}
+                    <span className="flex items-center gap-2">
+                      {days === null ? (
+                        <span className="text-slate-400">N/A (no expiry)</span>
+                      ) : (
+                        <span className={days < 0 ? 'text-red-600' : days <= 60 ? 'text-amber-600' : 'text-slate-500'}>
+                          {days < 0
+                            ? `Expired ${new Date(t.expiryDate!).toLocaleDateString('en-CA')}`
+                            : `Expires ${new Date(t.expiryDate!).toLocaleDateString('en-CA')}`}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => startEditingTicket(t)}
+                        className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTicket(t.id, t.ticketType.label)}
+                        disabled={deletingTicketId === t.id}
+                        className="rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                      >
+                        {deletingTicketId === t.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    </span>
                   </li>
                 );
               })}
