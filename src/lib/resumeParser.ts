@@ -30,7 +30,7 @@ Read the resume text and return ONLY a JSON object (no markdown fences, no pream
   "location": string | null,       // city and province, e.g. "Grande Prairie, AB" — if only one is present, include just that
   "title": string | null,          // e.g. "Drilling Engineer", "Wellsite Geologist"
   "yearsExperience": number | null,
-  "summary": string | null,        // 3-4 sentences, third person, information-dense — pull in named employers, formations, rig types, certifications, and quantified experience actually stated in the resume rather than generic filler ("skilled", "proven track record"); a shorter honest summary beats a padded vague one
+  "summary": string | null,        // third person, information-dense — name EVERY employer in the work history (don't drop any for length), plus formations, rig types, and quantified experience actually stated in the resume, rather than generic filler ("skilled", "proven track record"); a shorter honest summary beats a padded vague one; do NOT mention certifications/tickets (H2S Alive, IWCF, RigPass, etc.) — those are tracked separately
   "keywords": [
     { "label": string, "type": "FORMATION" | "RIG_TYPE" | "SKILL" | "CERTIFICATION" | "SOFTWARE", "confidence": number }
   ]
@@ -160,28 +160,37 @@ export async function regenerateConsultantSummary(
   lastName: string,
   title: string | null
 ): Promise<string> {
-  const prompt = `Write a sharp, information-dense 3-5 sentence professional summary for an oil
-& gas consultant, in the third person, based on the resume text below. This goes on a
-searchable staffing profile, so it should read like a technical recruiter wrote it - packed with
-real specifics pulled from the resume, not generic filler.
+  const prompt = `Write a sharp, information-dense professional summary for an oil & gas
+consultant, in the third person, based on the resume text below. This goes on a searchable
+staffing profile, so it should read like a technical recruiter wrote it - packed with real
+specifics pulled from the resume, not generic filler. Usually 3-5 sentences is enough, but if
+their work history has many employers, use as many sentences as it takes to name every one of
+them rather than dropping any for length.
 
 Their name is ${firstName} ${lastName}${title ? `, role: ${title}` : ''}. Beyond that, pull in
 whatever of the following actually appears in the resume text:
 - Total years of experience, and/or years in specific positions
-- Names of specific employers/companies they've worked for
+- EVERY employer/company named in the resume's work history - list all of them, not just the
+  most recent or most notable one. If the resume names five companies, the summary should
+  reflect all five.
 - Named formations/basins worked (e.g. Montney, Duvernay, Cardium, Viking)
 - Named rig types (e.g. Pad-Walking Rig, Super-Single Rig, Service Rig)
 - Specific technical disciplines/techniques (e.g. directional drilling, SAGD, MPD, UBD, well control)
-- Named certifications actually mentioned
 - Concrete achievements or scale (number of wells, rig-years, notable projects, safety
   record/TRIF, promotions)
+
+Do NOT mention certifications or tickets (H2S Alive, IWCF, RigPass, etc.) even if they appear in
+the resume - those are tracked separately on the consultant's profile and don't belong in this
+summary.
 
 Rules:
 - Every claim must be directly supported by the resume text - never invent, infer, or round up
   a number that isn't stated.
-- Prefer concrete nouns (named formations, rig types, employers, certifications, numbers) over
-  vague adjectives ("skilled", "proven track record", "excellent communicator") - only reach for
-  a vague descriptor when there's genuinely nothing concrete to say instead.
+- Every company named in the work history must be mentioned - don't drop any for length; trim
+  other details instead if the sentence count is getting tight.
+- Prefer concrete nouns (named formations, rig types, employers, numbers) over vague adjectives
+  ("skilled", "proven track record", "excellent communicator") - only reach for a vague
+  descriptor when there's genuinely nothing concrete to say instead.
 - If the resume is thin on specifics, write a shorter, honest summary rather than padding it out
   with generic claims.
 - Confident, professional tone. Return ONLY the summary paragraph - no preamble, no quotation
