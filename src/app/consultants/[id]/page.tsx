@@ -574,8 +574,8 @@ export default function ConsultantDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-5">
-              <div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
+              <div className="min-w-0">
                 <p className="text-xs text-slate-400">Discipline</p>
                 <p className="text-slate-700">
                   {consultant.discipline === 'DRILLING' && 'Drilling'}
@@ -584,33 +584,36 @@ export default function ConsultantDetailPage() {
                   {consultant.discipline === 'ALL' && 'All / Multiple'}
                 </p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-slate-400">Job Title</p>
-                <p className="text-slate-700">{consultant.title || 'Not on file'}</p>
+                <p className="truncate text-slate-700">{consultant.title || 'Not on file'}</p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-slate-400">Email</p>
                 {consultant.email ? (
-                  <a href={`mailto:${consultant.email}`} className="text-brand-700 hover:underline">
+                  <a
+                    href={`mailto:${consultant.email}`}
+                    className="block break-words text-brand-700 hover:underline"
+                  >
                     {consultant.email}
                   </a>
                 ) : (
                   <p className="text-slate-400">Not on file</p>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-slate-400">Phone</p>
                 {consultant.phone ? (
-                  <a href={`tel:${consultant.phone}`} className="text-brand-700 hover:underline">
+                  <a href={`tel:${consultant.phone}`} className="block break-words text-brand-700 hover:underline">
                     {consultant.phone}
                   </a>
                 ) : (
                   <p className="text-slate-400">Not on file</p>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-slate-400">Location</p>
-                <p className="text-slate-700">{consultant.location || 'Not on file'}</p>
+                <p className="truncate text-slate-700">{consultant.location || 'Not on file'}</p>
               </div>
             </div>
           )}
