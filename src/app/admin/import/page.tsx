@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import NavBar from '@/components/NavBar';
 import PageHeader from '@/components/PageHeader';
+import FileDropzone from '@/components/FileDropzone';
 
 interface ImportResult {
   created: number;
@@ -339,7 +340,7 @@ function ResumeImportSection() {
         Consultants search filters.
       </p>
 
-      <div className="mt-3">
+      <FileDropzone onFiles={(dropped) => setFiles(dropped)} disabled={uploading} className="mt-3 bg-slate-50">
         <input
           type="file"
           accept=".pdf,.docx"
@@ -350,7 +351,8 @@ function ResumeImportSection() {
         {files.length > 0 && (
           <p className="mt-1 text-xs text-slate-500">{files.length} file(s) selected</p>
         )}
-      </div>
+        <p className="mt-1 text-xs text-slate-500">or drag and drop resumes here</p>
+      </FileDropzone>
 
       <button
         onClick={handleUpload}

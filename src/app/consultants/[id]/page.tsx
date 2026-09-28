@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import NavBar from '@/components/NavBar';
 import PageHeader from '@/components/PageHeader';
+import FileDropzone from '@/components/FileDropzone';
 
 interface ConsultantDetail {
   id: string;
@@ -430,8 +431,7 @@ export default function ConsultantDetailPage() {
     load();
   }
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handleUpload(file: File | undefined) {
     if (!file) return;
 
     setUploading(true);
@@ -784,11 +784,15 @@ export default function ConsultantDetailPage() {
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-800">Tickets (Certifications)</h2>
 
-          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <FileDropzone
+            onFiles={(files) => setTicketUploadFiles(files)}
+            disabled={ticketUploading}
+            className="mb-4 bg-slate-50"
+          >
             <p className="mb-2 text-xs text-slate-500">
-              Upload a ticket photo or PDF — it reads the certification name and issue/expiry
-              dates automatically. Unlike the general file uploader below, everything here is
-              always saved as a ticket, never mistaken for a resume.
+              Upload a ticket photo or PDF, or drag and drop it here — it reads the certification
+              name and issue/expiry dates automatically. Unlike the general file uploader below,
+              everything here is always saved as a ticket, never mistaken for a resume.
             </p>
             <input
               type="file"
@@ -824,7 +828,7 @@ export default function ConsultantDetailPage() {
                 ))}
               </ul>
             )}
-          </div>
+          </FileDropzone>
 
           {consultant.tickets.length === 0 ? (
             <p className="text-sm text-slate-400">No tickets on file yet.</p>
@@ -991,12 +995,14 @@ export default function ConsultantDetailPage() {
             </div>
             <div>
               <label className="mb-1 block text-xs text-slate-500">File</label>
-              <input
-                type="file"
-                onChange={(e) => handleSosFileSelected(e.target.files?.[0] || null)}
-                disabled={sosParsingDates}
-                className="w-full text-sm"
-              />
+              <FileDropzone onFiles={(files) => handleSosFileSelected(files[0] || null)} disabled={sosParsingDates}>
+                <input
+                  type="file"
+                  onChange={(e) => handleSosFileSelected(e.target.files?.[0] || null)}
+                  disabled={sosParsingDates}
+                  className="w-full text-sm"
+                />
+              </FileDropzone>
             </div>
           </div>
           <button
@@ -1110,18 +1116,29 @@ export default function ConsultantDetailPage() {
             {generateMessage && <p className="mt-2 text-xs text-slate-500">{generateMessage}</p>}
           </div>
 
-          <label className="inline-block cursor-pointer rounded-lg bg-gold-500 px-4 py-2 text-sm font-bold text-brand-900 hover:bg-gold-600">
-            {uploading ? 'Processing…' : 'Upload resume (PDF/DOCX)'}
-            <input type="file" accept=".pdf,.docx" className="hidden" onChange={handleUpload} disabled={uploading} />
-          </label>
+          <FileDropzone onFiles={(files) => handleUpload(files[0])} disabled={uploading} className="inline-block">
+            <label className="inline-block cursor-pointer rounded-lg bg-gold-500 px-4 py-2 text-sm font-bold text-brand-900 hover:bg-gold-600">
+              {uploading ? 'Processing…' : 'Upload resume (PDF/DOCX)'}
+              <input
+                type="file"
+                accept=".pdf,.docx"
+                className="hidden"
+                onChange={(e) => handleUpload(e.target.files?.[0])}
+                disabled={uploading}
+              />
+            </label>
+            <p className="mt-1 text-xs text-slate-500">or drag and drop a file here</p>
+          </FileDropzone>
           {uploadMessage && <p className="mt-2 text-xs text-slate-500">{uploadMessage}</p>}
 
           <div className="mt-4 border-t border-slate-100 pt-4">
             <h3 className="mb-1 text-sm font-semibold text-slate-800">Upload Multiple Files</h3>
+            <FileDropzone onFiles={(files) => setBulkFiles(files)} disabled={bulkUploading} className="bg-slate-50">
             <p className="mb-2 text-xs text-slate-500">
               Select several files at once (updated resumes, certification photos, driver&apos;s
-              license, etc.) &mdash; it automatically figures out which is which, the same way the
-              Bulk Folder Import does. Sensitive-named files are skipped automatically.
+              license, etc.), or drag and drop them here &mdash; it automatically figures out
+              which is which, the same way the Bulk Folder Import does. Sensitive-named files are
+              skipped automatically.
             </p>
             <input
               type="file"
@@ -1160,6 +1177,7 @@ export default function ConsultantDetailPage() {
                 ))}
               </ul>
             )}
+            </FileDropzone>
           </div>
         </div>
       </main>
