@@ -101,6 +101,11 @@ export default function ConsultantDetailPage() {
   const [sosMessage, setSosMessage] = useState('');
   const [sosDeleting, setSosDeleting] = useState(false);
   const [sosParsingDates, setSosParsingDates] = useState(false);
+  const [ticketUploadFiles, setTicketUploadFiles] = useState<File[]>([]);
+  const [ticketUploading, setTicketUploading] = useState(false);
+  const [ticketUploadResults, setTicketUploadResults] = useState<
+    { fileName: string; type: string; message: string }[] | null
+  >(null);
   const [editingTicketId, setEditingTicketId] = useState<string | null>(null);
   const [editIssueDate, setEditIssueDate] = useState('');
   const [editExpiryDate, setEditExpiryDate] = useState('');
@@ -354,6 +359,28 @@ export default function ConsultantDetailPage() {
     setSosDeleting(true);
     await fetch(`/api/consultants/${id}/service-order-sheet`, { method: 'DELETE' });
     setSosDeleting(false);
+    load();
+  }
+
+  async function handleTicketUpload() {
+    if (ticketUploadFiles.length === 0) return;
+
+    setTicketUploading(true);
+    setTicketUploadResults(null);
+    const formData = new FormData();
+    ticketUploadFiles.forEach((f) => formData.append('files', f));
+
+    const res = await fetch(`/api/consultants/${id}/tickets/upload`, { method: 'POST', body: formData });
+    const data = await res.json();
+    setTicketUploading(false);
+
+    if (!res.ok) {
+      alert(data.error || 'Failed to upload ticket(s)');
+      return;
+    }
+
+    setTicketUploadResults(data.results);
+    setTicketUploadFiles([]);
     load();
   }
 
@@ -756,6 +783,49 @@ export default function ConsultantDetailPage() {
 
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-800">Tickets (Certifications)</h2>
+
+          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="mb-2 text-xs text-slate-500">
+              Upload a ticket photo or PDF — it reads the certification name and issue/expiry
+              dates automatically. Unlike the general file uploader below, everything here is
+              always saved as a ticket, never mistaken for a resume.
+            </p>
+            <input
+              type="file"
+              multiple
+              accept="image/*,.pdf"
+              onChange={(e) => setTicketUploadFiles(Array.from(e.target.files || []))}
+              disabled={ticketUploading}
+              className="text-sm"
+            />
+            {ticketUploadFiles.length > 0 && (
+              <p className="mt-1 text-xs text-slate-500">{ticketUploadFiles.length} file(s) selected</p>
+            )}
+            <div>
+              <button
+                onClick={handleTicketUpload}
+                disabled={ticketUploadFiles.length === 0 || ticketUploading}
+                className="mt-2 rounded-lg bg-brand-800 px-4 py-1.5 text-sm font-bold text-white hover:bg-brand-900 disabled:opacity-50"
+              >
+                {ticketUploading ? 'Reading…' : 'Upload Ticket(s)'}
+              </button>
+            </div>
+            {ticketUploadResults && (
+              <ul className="mt-3 space-y-1 text-xs">
+                {ticketUploadResults.map((r, i) => (
+                  <li
+                    key={i}
+                    className={
+                      r.type === 'error' ? 'text-red-700' : r.type === 'skipped' ? 'text-slate-400' : 'text-slate-600'
+                    }
+                  >
+                    <span className="font-medium">{r.fileName}</span>: {r.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           {consultant.tickets.length === 0 ? (
             <p className="text-sm text-slate-400">No tickets on file yet.</p>
           ) : (
