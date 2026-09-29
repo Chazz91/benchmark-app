@@ -8,8 +8,10 @@ export const maxDuration = 300;
 
 // POST - one-time cleanup for consultants who were imported before discipline was part of
 // resume extraction, and are still sitting at the "All / Multiple" default as a result. Goes
-// through every consultant at that default, reads their most recent original resume on file,
-// and reclassifies just the discipline field - nothing else on the profile is touched.
+// through every consultant at that default, reads EVERY original resume they have on file
+// (not just the most recent one - a consultant can have several, and the discipline signal
+// might only be clear on one of them), and reclassifies just the discipline field - nothing
+// else on the profile is touched.
 export async function POST() {
   const session = await getServerSession(authOptions);
   if (!session || !['ADMIN', 'RECRUITER'].includes(session.user.role)) {
@@ -26,15 +28,19 @@ export async function POST() {
 
   for (const consultant of consultants) {
     const name = `${consultant.firstName} ${consultant.lastName}`;
-    const sourceResume = consultant.resumes.find((r) => !r.isFormatted && r.rawText);
+    const sourceResumes = consultant.resumes.filter((r) => !r.isFormatted && r.rawText);
 
-    if (!sourceResume || !sourceResume.rawText) {
+    if (sourceResumes.length === 0) {
       results.push({ name, status: 'skipped', message: 'No resume on file to read' });
       continue;
     }
 
+    // Combine every resume's text (most recent first) rather than picking just one - it's a
+    // single classification call either way, so there's no reason not to give it everything.
+    const combinedText = sourceResumes.map((r) => `--- ${r.fileName} ---\n${r.rawText}`).join('\n\n');
+
     try {
-      const discipline = await inferDisciplineFromResume(sourceResume.rawText);
+      const discipline = await inferDisciplineFromResume(combinedText);
       if (!discipline || discipline === 'ALL') {
         results.push({ name, status: 'skipped', message: 'Resume genuinely reads as All / Multiple' });
         continue;
