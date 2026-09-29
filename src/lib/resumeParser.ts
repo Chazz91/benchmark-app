@@ -8,6 +8,8 @@ export interface ParsedKeyword {
   confidence: number; // 0-1
 }
 
+export type ParsedDiscipline = 'DRILLING' | 'COMPLETIONS' | 'LEASE_CONSTRUCTION' | 'ALL';
+
 export interface ParsedResume {
   fullName?: string;
   email?: string;
@@ -16,6 +18,7 @@ export interface ParsedResume {
   title?: string;
   yearsExperience?: number;
   summary?: string;
+  discipline?: ParsedDiscipline;
   keywords: ParsedKeyword[];
 }
 
@@ -31,10 +34,27 @@ Read the resume text and return ONLY a JSON object (no markdown fences, no pream
   "title": string | null,          // e.g. "Drilling Engineer", "Wellsite Geologist"
   "yearsExperience": number | null,
   "summary": string | null,        // third person, information-dense — name EVERY employer in the work history (don't drop any for length), plus formations, rig types, and quantified experience actually stated in the resume, rather than generic filler ("skilled", "proven track record"); a shorter honest summary beats a padded vague one; do NOT mention certifications/tickets (H2S Alive, IWCF, RigPass, etc.) — those are tracked separately
+  "discipline": "DRILLING" | "COMPLETIONS" | "LEASE_CONSTRUCTION" | "ALL",
   "keywords": [
     { "label": string, "type": "FORMATION" | "RIG_TYPE" | "SKILL" | "CERTIFICATION" | "SOFTWARE", "confidence": number }
   ]
 }
+
+Rules for discipline - read the actual job titles and described work, then pick the ONE that
+fits best. Most resumes clearly belong to one discipline - only use "ALL" when the resume
+genuinely shows substantial, ongoing experience in more than one, which is rare:
+- DRILLING: drilling rig crews and supervision - floorhand, derrickhand, motorhand, driller,
+  rig manager, tool push, directional driller, drilling engineer, mud logger, wellsite
+  supervisor/consultant on a drilling rig.
+- COMPLETIONS: completions/service rig work - completions technician/supervisor, service rig
+  crews, workover, frac/fracturing, wireline, well testing, recompletions, well abandonments,
+  flowback.
+- LEASE_CONSTRUCTION: lease site prep, access roads, civil/earthworks work supporting oil & gas
+  operations (not the drilling or completions work itself).
+- ALL: only when the work history shows real, substantial experience across more than one of
+  the above - not just because the resume is vague or you're unsure. If the resume doesn't
+  give you enough to tell, prefer the discipline implied by their most recent/primary role over
+  defaulting to ALL.
 
 Rules for keywords:
 - FORMATION: named Western Canadian geological formations/basins the person has worked (e.g. "Montney", "Duvernay", "Cardium", "Viking", "Clearwater"). This is a Western Canadian oil & gas company — do not tag US formations (e.g. Permian, Eagle Ford, Marcellus) even if mentioned; if a US formation is the only thing mentioned, skip it rather than mistranslating it to a Canadian one.
@@ -71,6 +91,10 @@ export async function parseResumeText(resumeText: string): Promise<ParsedResume>
     const parsed = JSON.parse(cleaned) as ParsedResume;
     // Defensive defaults
     parsed.keywords = Array.isArray(parsed.keywords) ? parsed.keywords : [];
+    const validDisciplines: ParsedDiscipline[] = ['DRILLING', 'COMPLETIONS', 'LEASE_CONSTRUCTION', 'ALL'];
+    if (!validDisciplines.includes(parsed.discipline as ParsedDiscipline)) {
+      parsed.discipline = undefined;
+    }
     return parsed;
   } catch (err) {
     throw new Error(`Failed to parse resume extraction response: ${(err as Error).message}`);

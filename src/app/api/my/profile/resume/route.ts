@@ -86,6 +86,9 @@ export async function POST(request: Request) {
     if (!consultant.location && parsed.location) updateData.location = parsed.location;
     if (!consultant.yearsExperience && parsed.yearsExperience) updateData.yearsExperience = parsed.yearsExperience;
     if (!consultant.summary && parsed.summary) updateData.summary = parsed.summary;
+    if (consultant.discipline === 'ALL' && parsed.discipline && parsed.discipline !== 'ALL') {
+      updateData.discipline = parsed.discipline;
+    }
     if (Object.keys(updateData).length > 0) {
       await prisma.consultant.update({ where: { id: consultant.id }, data: updateData });
     }
