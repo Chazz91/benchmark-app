@@ -81,8 +81,10 @@ export async function POST(request: Request) {
 
     // Fill in any fields that are currently blank - never overwrite what they've already set
     const updateData: Record<string, unknown> = {};
+    if (!consultant.phone && parsed.phone) updateData.phone = parsed.phone;
     if (!consultant.title && parsed.title) updateData.title = parsed.title;
     if (!consultant.location && parsed.location) updateData.location = parsed.location;
+    if (!consultant.yearsExperience && parsed.yearsExperience) updateData.yearsExperience = parsed.yearsExperience;
     if (!consultant.summary && parsed.summary) updateData.summary = parsed.summary;
     if (Object.keys(updateData).length > 0) {
       await prisma.consultant.update({ where: { id: consultant.id }, data: updateData });
