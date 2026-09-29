@@ -25,6 +25,8 @@ interface Consultant {
   currentClient: { name: string } | null;
   location: string | null;
   yearsExperience: number | null;
+  email: string | null;
+  userId: string | null;
   keywords: { keyword: Keyword; source: string }[];
 }
 
@@ -52,6 +54,7 @@ export default function ConsultantsPage() {
   const [loading, setLoading] = useState(true);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [composeOpen, setComposeOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   // Load full keyword taxonomy once, for the toggle panel
   useEffect(() => {
@@ -293,12 +296,20 @@ export default function ConsultantsPage() {
                   Select all {consultants.length} shown
                 </label>
                 {checkedIds.size > 0 && (
-                  <button
-                    onClick={() => setComposeOpen(true)}
-                    className="rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600"
-                  >
-                    Message Selected ({checkedIds.size})
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setInviteOpen(true)}
+                      className="rounded-lg bg-slate-100 px-4 py-1.5 text-sm font-bold text-slate-700 hover:bg-slate-200"
+                    >
+                      Send Invite Links ({checkedIds.size})
+                    </button>
+                    <button
+                      onClick={() => setComposeOpen(true)}
+                      className="rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600"
+                    >
+                      Message Selected ({checkedIds.size})
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -417,6 +428,126 @@ export default function ConsultantsPage() {
           }}
         />
       )}
+
+      {inviteOpen && (
+        <InviteModal
+          consultants={consultants.filter((c) => checkedIds.has(c.id))}
+          onClose={() => setInviteOpen(false)}
+          onSent={() => {
+            setInviteOpen(false);
+            setCheckedIds(new Set());
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function InviteModal({
+  consultants,
+  onClose,
+  onSent,
+}: {
+  consultants: Consultant[];
+  onClose: () => void;
+  onSent: () => void;
+}) {
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [results, setResults] = useState<{ name: string; status: string; message: string }[] | null>(null);
+
+  const alreadyHaveLogin = consultants.filter((c) => c.userId);
+  const noEmail = consultants.filter((c) => !c.userId && !c.email);
+  const eligible = consultants.filter((c) => !c.userId && c.email);
+
+  async function handleSend() {
+    setSending(true);
+    setError('');
+
+    const res = await fetch('/api/admin/consultants/bulk-invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ consultantIds: consultants.map((c) => c.id) }),
+    });
+    const data = await res.json();
+    setSending(false);
+
+    if (!res.ok) {
+      setError(data.error || 'Something went wrong');
+      return;
+    }
+    setResults(data.results);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        {results ? (
+          <div>
+            <h2 className="mb-2 text-lg font-semibold text-green-700">Sent!</h2>
+            <p className="mb-3 text-sm text-slate-600">
+              Sent {results.filter((r) => r.status === 'sent').length} invite link(s).
+            </p>
+            <ul className="max-h-64 space-y-1 overflow-y-auto text-xs">
+              {results.map((r, i) => (
+                <li
+                  key={i}
+                  className={
+                    r.status === 'error' ? 'text-red-700' : r.status === 'skipped' ? 'text-slate-400' : 'text-slate-600'
+                  }
+                >
+                  <span className="font-medium">{r.name}</span>: {r.message}
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={onSent}
+              className="mt-4 w-full rounded-lg bg-gold-500 py-2 text-sm font-bold text-brand-900 hover:bg-gold-600"
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <div>
+            <h2 className="mb-1 text-lg font-semibold text-brand-900">Send Invite Links</h2>
+            <p className="mb-4 text-sm text-slate-500">
+              Sends each consultant an email with their own link to set a password and access
+              their profile — the same link "Copy invite link" gives you on a profile page, just
+              for everyone selected at once.
+            </p>
+            <ul className="mb-4 space-y-1 text-sm text-slate-600">
+              <li>
+                <span className="font-medium text-slate-800">{eligible.length}</span> will get an
+                invite email
+              </li>
+              {alreadyHaveLogin.length > 0 && (
+                <li className="text-slate-400">
+                  {alreadyHaveLogin.length} skipped — already has a login
+                </li>
+              )}
+              {noEmail.length > 0 && (
+                <li className="text-amber-600">{noEmail.length} skipped — no email on file</li>
+              )}
+            </ul>
+            {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={handleSend}
+                disabled={sending || eligible.length === 0}
+                className="flex-1 rounded-lg bg-gold-500 py-2 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
+              >
+                {sending ? 'Sending…' : `Send to ${eligible.length}`}
+              </button>
+              <button
+                onClick={onClose}
+                className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

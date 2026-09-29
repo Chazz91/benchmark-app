@@ -38,6 +38,23 @@ export async function sendInviteEmail(to: string, firstName: string, token: stri
   });
 }
 
+// For an existing consultant record who hasn't set up their own login yet - different wording
+// than sendInviteEmail above, which is for a job applicant whose application was just accepted.
+export async function sendConsultantProfileInviteEmail(to: string, firstName: string, token: string) {
+  const link = `${APP_URL}/signup/${token}`;
+  await send({
+    from: FROM,
+    to,
+    subject: 'Set up your Benchmark Engineering Connect profile',
+    html: `
+      <p>Hi ${firstName},</p>
+      <p>You're on file with Benchmark Engineering — click the link below to set a password and access your profile, where you can keep your tickets and resume up to date:</p>
+      <p><a href="${link}">${link}</a></p>
+      <p>This link expires in 7 days.</p>
+    `,
+  });
+}
+
 export async function sendTicketExpiryEmail(
   to: string,
   firstName: string,
