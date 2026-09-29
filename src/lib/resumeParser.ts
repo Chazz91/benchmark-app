@@ -9,6 +9,7 @@ export interface ParsedKeyword {
 }
 
 export type ParsedDiscipline = 'DRILLING' | 'COMPLETIONS' | 'LEASE_CONSTRUCTION' | 'ALL';
+const VALID_DISCIPLINES: ParsedDiscipline[] = ['DRILLING', 'COMPLETIONS', 'LEASE_CONSTRUCTION', 'ALL'];
 
 export interface ParsedResume {
   fullName?: string;
@@ -21,6 +22,22 @@ export interface ParsedResume {
   discipline?: ParsedDiscipline;
   keywords: ParsedKeyword[];
 }
+
+const DISCIPLINE_RULES = `Rules for discipline - read the actual job titles and described work, then pick the ONE that
+fits best. Most resumes clearly belong to one discipline - only use "ALL" when the resume
+genuinely shows substantial, ongoing experience in more than one, which is rare:
+- DRILLING: drilling rig crews and supervision - floorhand, derrickhand, motorhand, driller,
+  rig manager, tool push, directional driller, drilling engineer, mud logger, wellsite
+  supervisor/consultant on a drilling rig.
+- COMPLETIONS: completions/service rig work - completions technician/supervisor, service rig
+  crews, workover, frac/fracturing, wireline, well testing, recompletions, well abandonments,
+  flowback.
+- LEASE_CONSTRUCTION: lease site prep, access roads, civil/earthworks work supporting oil & gas
+  operations (not the drilling or completions work itself).
+- ALL: only when the work history shows real, substantial experience across more than one of
+  the above - not just because the resume is vague or you're unsure. If the resume doesn't
+  give you enough to tell, prefer the discipline implied by their most recent/primary role over
+  defaulting to ALL.`;
 
 const EXTRACTION_PROMPT = `You are extracting structured data from an oil & gas industry resume for a staffing database.
 
@@ -40,21 +57,7 @@ Read the resume text and return ONLY a JSON object (no markdown fences, no pream
   ]
 }
 
-Rules for discipline - read the actual job titles and described work, then pick the ONE that
-fits best. Most resumes clearly belong to one discipline - only use "ALL" when the resume
-genuinely shows substantial, ongoing experience in more than one, which is rare:
-- DRILLING: drilling rig crews and supervision - floorhand, derrickhand, motorhand, driller,
-  rig manager, tool push, directional driller, drilling engineer, mud logger, wellsite
-  supervisor/consultant on a drilling rig.
-- COMPLETIONS: completions/service rig work - completions technician/supervisor, service rig
-  crews, workover, frac/fracturing, wireline, well testing, recompletions, well abandonments,
-  flowback.
-- LEASE_CONSTRUCTION: lease site prep, access roads, civil/earthworks work supporting oil & gas
-  operations (not the drilling or completions work itself).
-- ALL: only when the work history shows real, substantial experience across more than one of
-  the above - not just because the resume is vague or you're unsure. If the resume doesn't
-  give you enough to tell, prefer the discipline implied by their most recent/primary role over
-  defaulting to ALL.
+${DISCIPLINE_RULES}
 
 Rules for keywords:
 - FORMATION: named Western Canadian geological formations/basins the person has worked (e.g. "Montney", "Duvernay", "Cardium", "Viking", "Clearwater"). This is a Western Canadian oil & gas company — do not tag US formations (e.g. Permian, Eagle Ford, Marcellus) even if mentioned; if a US formation is the only thing mentioned, skip it rather than mistranslating it to a Canadian one.
@@ -91,13 +94,47 @@ export async function parseResumeText(resumeText: string): Promise<ParsedResume>
     const parsed = JSON.parse(cleaned) as ParsedResume;
     // Defensive defaults
     parsed.keywords = Array.isArray(parsed.keywords) ? parsed.keywords : [];
-    const validDisciplines: ParsedDiscipline[] = ['DRILLING', 'COMPLETIONS', 'LEASE_CONSTRUCTION', 'ALL'];
-    if (!validDisciplines.includes(parsed.discipline as ParsedDiscipline)) {
+    if (!VALID_DISCIPLINES.includes(parsed.discipline as ParsedDiscipline)) {
       parsed.discipline = undefined;
     }
     return parsed;
   } catch (err) {
     throw new Error(`Failed to parse resume extraction response: ${(err as Error).message}`);
+  }
+}
+
+// Lightweight, discipline-only classification - used to backfill consultants who are still
+// sitting at the "All / Multiple" default because they were imported before discipline was
+// part of the full extraction above. Much cheaper than re-running parseResumeText, since it
+// doesn't need to also re-extract keywords/summary/etc. for a profile that's otherwise fine.
+export async function inferDisciplineFromResume(rawText: string): Promise<ParsedDiscipline | null> {
+  const prompt = `Read this oil & gas industry resume and classify which discipline it belongs
+to. Return ONLY a JSON object (no markdown fences, no preamble): { "discipline": "DRILLING" | "COMPLETIONS" | "LEASE_CONSTRUCTION" | "ALL" }
+
+${DISCIPLINE_RULES}
+
+Resume text:
+"""
+${rawText.slice(0, 15000)}
+"""`;
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 50,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const textBlock = response.content.find((b) => b.type === 'text');
+  if (!textBlock || textBlock.type !== 'text') return null;
+
+  const cleaned = textBlock.text.replace(/```json|```/g, '').trim();
+  try {
+    const parsed = JSON.parse(cleaned) as { discipline?: string };
+    return VALID_DISCIPLINES.includes(parsed.discipline as ParsedDiscipline)
+      ? (parsed.discipline as ParsedDiscipline)
+      : null;
+  } catch {
+    return null;
   }
 }
 
