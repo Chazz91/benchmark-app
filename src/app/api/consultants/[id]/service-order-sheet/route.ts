@@ -23,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const signedUrl = await getResumeSignedUrl(consultant.serviceOrderSheetUrl);
+  const signedUrl = await getResumeSignedUrl(consultant.serviceOrderSheetUrl, consultant.serviceOrderSheetFileName || undefined);
   return NextResponse.redirect(signedUrl);
 }
 
