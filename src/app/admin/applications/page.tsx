@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import NavBar from '@/components/NavBar';
 import PageHeader from '@/components/PageHeader';
+import { opensInlineInBrowser } from '@/lib/fileDisplay';
 
 interface Application {
   id: string;
@@ -102,8 +103,7 @@ export default function ApplicationsPage() {
                 {app.resumeUrl && (
                   <a
                     href={`/api/admin/applications/${app.id}/resume`}
-                    target="_blank"
-                    rel="noreferrer"
+                    {...(opensInlineInBrowser(app.resumeUrl) ? { target: '_blank', rel: 'noreferrer' } : {})}
                     className="text-xs text-brand-700 hover:underline"
                   >
                     View resume
