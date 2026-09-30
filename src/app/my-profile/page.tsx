@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import NavBar from '@/components/NavBar';
 import PageHeader from '@/components/PageHeader';
 import clsx from 'clsx';
+import { opensInlineInBrowser } from '@/lib/fileDisplay';
 
 interface ClientCompany {
   id: string;
@@ -232,8 +233,9 @@ export default function MyProfilePage() {
             <p className="mb-3 text-xs text-slate-500">Uploaded by your admin — for your reference.</p>
             <a
               href={`/api/consultants/${profile.id}/service-order-sheet`}
-              target="_blank"
-              rel="noreferrer"
+              {...(opensInlineInBrowser(profile.serviceOrderSheetFileName)
+                ? { target: '_blank', rel: 'noreferrer' }
+                : {})}
               className="text-sm text-brand-700 hover:underline"
             >
               {profile.serviceOrderSheetFileName}
@@ -335,8 +337,7 @@ export default function MyProfilePage() {
               <li key={r.id}>
                 <a
                   href={`/api/resumes/${r.id}/view`}
-                  target="_blank"
-                  rel="noreferrer"
+                  {...(opensInlineInBrowser(r.fileName) ? { target: '_blank', rel: 'noreferrer' } : {})}
                   className="text-brand-700 hover:underline"
                 >
                   {r.fileName}

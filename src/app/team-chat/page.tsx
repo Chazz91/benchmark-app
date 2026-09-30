@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import NavBar from '@/components/NavBar';
 import PageHeader from '@/components/PageHeader';
+import { opensInlineInBrowser } from '@/lib/fileDisplay';
 
 interface Message {
   id: string;
@@ -110,8 +111,7 @@ export default function TeamChatPage() {
                       {m.attachmentUrl && (
                         <a
                           href={`/api/team-chat/${m.id}/attachment`}
-                          target="_blank"
-                          rel="noreferrer"
+                          {...(opensInlineInBrowser(m.attachmentFileName) ? { target: '_blank', rel: 'noreferrer' } : {})}
                           className={
                             isMe
                               ? 'mt-1 flex items-center gap-1 text-xs font-medium text-brand-900 underline'

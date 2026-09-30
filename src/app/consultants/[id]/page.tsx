@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import NavBar from '@/components/NavBar';
 import PageHeader from '@/components/PageHeader';
 import FileDropzone from '@/components/FileDropzone';
+import { opensInlineInBrowser } from '@/lib/fileDisplay';
 
 interface ConsultantDetail {
   id: string;
@@ -946,8 +947,9 @@ export default function ConsultantDetailPage() {
               <span>
                 <a
                   href={`/api/consultants/${id}/service-order-sheet`}
-                  target="_blank"
-                  rel="noreferrer"
+                  {...(opensInlineInBrowser(consultant.serviceOrderSheetFileName)
+                    ? { target: '_blank', rel: 'noreferrer' }
+                    : {})}
                   className="text-brand-700 hover:underline"
                 >
                   {consultant.serviceOrderSheetFileName}
@@ -1080,8 +1082,7 @@ export default function ConsultantDetailPage() {
                 <span>
                   <a
                     href={`/api/resumes/${r.id}/view`}
-                    target="_blank"
-                    rel="noreferrer"
+                    {...(opensInlineInBrowser(r.fileName) ? { target: '_blank', rel: 'noreferrer' } : {})}
                     className="text-brand-700 hover:underline"
                   >
                     {r.fileName}
