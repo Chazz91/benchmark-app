@@ -7,6 +7,10 @@ import { parseTicketDocument } from '@/lib/ticketDocumentParser';
 import { resolveTicketType } from '@/lib/resolveTicketType';
 import { isExcludedFile } from '@/lib/fileExclusion';
 
+// A full-size phone photo can take a while for Claude to read - give it real headroom instead
+// of risking Vercel's default timeout.
+export const maxDuration = 300;
+
 // POST multipart/form-data: { file, consultantId }
 // Processes exactly ONE certification/license document for an already-known consultant.
 export async function POST(request: Request) {

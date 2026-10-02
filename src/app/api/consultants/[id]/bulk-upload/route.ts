@@ -8,6 +8,11 @@ import { resolveOrCreateKeyword } from '@/lib/keywords';
 import { parseTicketDocument } from '@/lib/ticketDocumentParser';
 import { resolveTicketType } from '@/lib/resolveTicketType';
 
+// Loops over every file in the batch, each needing its own Claude call (resume parse or ticket
+// photo read) - give it real headroom instead of risking Vercel's default timeout partway
+// through a large batch.
+export const maxDuration = 300;
+
 const RESUME_NAME_HINTS = ['resume', 'cv'];
 const IMAGE_OR_PDF = /\.(pdf|jpg|jpeg|png|gif|webp)$/i;
 

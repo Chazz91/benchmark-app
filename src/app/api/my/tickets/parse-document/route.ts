@@ -3,6 +3,10 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { parseTicketDocument } from '@/lib/ticketDocumentParser';
 
+// A full-size phone photo can take a while for Claude to read - give it real headroom instead
+// of risking Vercel's default timeout.
+export const maxDuration = 300;
+
 // POST multipart/form-data: { file }
 // Consultant-only. Reads a photo/scan of one or more certification cards and returns what it
 // detected (name, issue date, expiry date) for the consultant to review and confirm before

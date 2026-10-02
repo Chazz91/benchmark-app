@@ -372,18 +372,29 @@ export default function ConsultantDetailPage() {
     const formData = new FormData();
     ticketUploadFiles.forEach((f) => formData.append('files', f));
 
-    const res = await fetch(`/api/consultants/${id}/tickets/upload`, { method: 'POST', body: formData });
-    const data = await res.json();
-    setTicketUploading(false);
+    try {
+      const res = await fetch(`/api/consultants/${id}/tickets/upload`, { method: 'POST', body: formData });
+      const data = await res.json();
 
-    if (!res.ok) {
-      alert(data.error || 'Failed to upload ticket(s)');
-      return;
+      if (!res.ok) {
+        alert(data.error || 'Failed to upload ticket(s)');
+        return;
+      }
+
+      setTicketUploadResults(data.results);
+      setTicketUploadFiles([]);
+      load();
+    } catch (err) {
+      // A timed-out or otherwise failed request can come back as something other than JSON
+      // (e.g. a gateway error page) - without this, res.json() above would throw and leave
+      // the button stuck on "Reading..." forever with no indication anything went wrong.
+      alert(
+        'Upload failed or timed out - this can happen with a very large photo. Try a smaller image, or fewer at once.'
+      );
+      console.error('Ticket upload failed:', err);
+    } finally {
+      setTicketUploading(false);
     }
-
-    setTicketUploadResults(data.results);
-    setTicketUploadFiles([]);
-    load();
   }
 
   function startEditingTicket(ticket: ConsultantDetail['tickets'][number]) {
