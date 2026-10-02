@@ -6,6 +6,12 @@ import { uploadResumeFile } from '@/lib/storage';
 import { parseTicketDocument } from '@/lib/ticketDocumentParser';
 import { resolveTicketType } from '@/lib/resolveTicketType';
 
+// A full-size phone photo can take a while for Claude to read, and this loops over
+// potentially several of them in one request - give it real headroom instead of risking
+// Vercel's default timeout, which would otherwise kill the request mid-upload and leave the
+// frontend hanging with no saved ticket and no clear error.
+export const maxDuration = 300;
+
 interface FileResult {
   fileName: string;
   type: 'ticket' | 'skipped' | 'error';
