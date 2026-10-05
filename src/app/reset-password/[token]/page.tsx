@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Logo from '@/components/Logo';
+import PasswordInput from '@/components/PasswordInput';
 
 export default function ResetPasswordPage() {
   const params = useParams();
@@ -81,8 +82,7 @@ export default function ResetPasswordPage() {
             <h1 className="mb-1 text-center text-lg font-semibold text-brand-900">Set a new password</h1>
             <div>
               <label className="mb-1 block text-xs text-slate-500">New Password</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
@@ -91,8 +91,7 @@ export default function ResetPasswordPage() {
             </div>
             <div>
               <label className="mb-1 block text-xs text-slate-500">Confirm Password</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"

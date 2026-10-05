@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Logo from '@/components/Logo';
+import PasswordInput from '@/components/PasswordInput';
 
 type Step = 'credentials' | 'code' | 'forgot' | 'forgot-sent';
 
@@ -99,8 +100,7 @@ export default function LoginPage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
-                <input
-                  type="password"
+                <PasswordInput
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
