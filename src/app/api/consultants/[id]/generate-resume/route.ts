@@ -36,22 +36,32 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   const ticketLabels = consultant.tickets.map((t) => t.ticketType.label);
 
   try {
-    const buffer = await generatePolishedResume(
+    const name = `${consultant.firstName} ${consultant.lastName}`;
+    const { pdfBuffer, docxBuffer } = await generatePolishedResume(
       sourceResume.rawText,
       ticketLabels,
-      `${consultant.firstName} ${consultant.lastName}`,
+      name,
       consultant.title || ''
     );
 
-    const fileName = `${consultant.firstName} ${consultant.lastName} - Benchmark Resume.pdf`;
-    const key = `resumes/${consultant.id}/${Date.now()}-benchmark-format.pdf`;
-    const fileUrl = await uploadResumeFile(key, buffer, 'application/pdf');
+    const baseName = `${name} - Benchmark Resume`;
+    const timestamp = Date.now();
+    const [fileUrl, editableFileUrl] = await Promise.all([
+      uploadResumeFile(`resumes/${consultant.id}/${timestamp}-benchmark-format.pdf`, pdfBuffer, 'application/pdf'),
+      uploadResumeFile(
+        `resumes/${consultant.id}/${timestamp}-benchmark-format.docx`,
+        docxBuffer,
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ),
+    ]);
 
     const resume = await prisma.resume.create({
       data: {
         consultantId: consultant.id,
-        fileName,
+        fileName: `${baseName}.pdf`,
         fileUrl,
+        editableFileName: `${baseName}.docx`,
+        editableFileUrl,
         isFormatted: true,
         parsedAt: new Date(),
       },
