@@ -70,9 +70,14 @@ export async function POST(request: Request) {
 
   // 6. Optionally fill in blank consultant fields from parsed data
   const updateData: Record<string, unknown> = {};
+  if (!consultant.phone && parsed.phone) updateData.phone = parsed.phone;
+  if (!consultant.location && parsed.location) updateData.location = parsed.location;
   if (!consultant.title && parsed.title) updateData.title = parsed.title;
   if (!consultant.yearsExperience && parsed.yearsExperience) updateData.yearsExperience = parsed.yearsExperience;
   if (!consultant.summary && parsed.summary) updateData.summary = parsed.summary;
+  if (consultant.discipline === 'ALL' && parsed.discipline && parsed.discipline !== 'ALL') {
+    updateData.discipline = parsed.discipline;
+  }
 
   if (Object.keys(updateData).length > 0) {
     await prisma.consultant.update({ where: { id: consultantId }, data: updateData });

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { uploadResumeFile } from '@/lib/storage';
 import { extractTextFromFile, parseResumeText } from '@/lib/resumeParser';
 import { resolveOrCreateKeyword } from '@/lib/keywords';
+import { sendResumeUploadedAlertEmail } from '@/lib/email';
 
 // POST multipart/form-data: { file }
 // Consultant-only self-service resume upload. Same pipeline as the admin/import version:
@@ -41,6 +42,26 @@ export async function POST(request: Request) {
     },
   });
 
+  // Bump updatedAt so this shows up under "Recently Updated" sorting on the consultants page,
+  // even if none of the auto-fill-when-blank fields below end up changing.
+  await prisma.consultant.update({ where: { id: consultant.id }, data: {} });
+
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN', isActive: true },
+      select: { email: true },
+    });
+    await sendResumeUploadedAlertEmail(
+      admins.map((a) => a.email),
+      `${consultant.firstName} ${consultant.lastName}`,
+      consultant.id,
+      file.name
+    );
+  } catch (err) {
+    console.error('Failed to send resume-uploaded alert email:', err);
+    // Don't fail the resume save just because the notification email failed
+  }
+
   try {
     const parsed = await parseResumeText(rawText);
 
@@ -60,9 +81,14 @@ export async function POST(request: Request) {
 
     // Fill in any fields that are currently blank - never overwrite what they've already set
     const updateData: Record<string, unknown> = {};
+    if (!consultant.phone && parsed.phone) updateData.phone = parsed.phone;
     if (!consultant.title && parsed.title) updateData.title = parsed.title;
     if (!consultant.location && parsed.location) updateData.location = parsed.location;
+    if (!consultant.yearsExperience && parsed.yearsExperience) updateData.yearsExperience = parsed.yearsExperience;
     if (!consultant.summary && parsed.summary) updateData.summary = parsed.summary;
+    if (consultant.discipline === 'ALL' && parsed.discipline && parsed.discipline !== 'ALL') {
+      updateData.discipline = parsed.discipline;
+    }
     if (Object.keys(updateData).length > 0) {
       await prisma.consultant.update({ where: { id: consultant.id }, data: updateData });
     }

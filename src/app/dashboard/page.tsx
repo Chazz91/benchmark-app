@@ -45,7 +45,7 @@ export default async function DashboardPage() {
     { label: 'Active', value: activeConsultants, href: '/consultants', icon: ICONS.check },
     { label: 'On Bench', value: benchCount, href: '/consultants', icon: ICONS.pause },
     { label: 'Pending Applications', value: pendingApplications, href: '/admin/applications', icon: ICONS.inbox },
-    { label: 'Tickets Expiring Soon', value: expiringTickets, href: '/consultants', icon: ICONS.clock },
+    { label: 'Tickets Expiring Soon', value: expiringTickets, href: '/admin/tickets-expiring', icon: ICONS.clock },
     {
       label: 'Avg Evaluation Score',
       value: evalAgg._count > 0 ? evalAgg._avg.overallScore?.toFixed(1) : '—',

@@ -28,7 +28,22 @@ export async function uploadResumeFile(
   return key; // store this key in the DB; generate signed URLs on read
 }
 
-export async function getResumeSignedUrl(key: string): Promise<string> {
-  const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
+// Browsers (mobile Safari especially) have no built-in viewer for these, so opening one
+// directly just shows a blank page - force a download/"open in..." instead. PDFs and images
+// render fine inline everywhere, so those keep the normal in-browser preview.
+const INLINE_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp']);
+
+export async function getResumeSignedUrl(key: string, fileName?: string): Promise<string> {
+  const name = fileName || key.split('/').pop() || 'file';
+  const extension = name.split('.').pop()?.toLowerCase() || '';
+  const disposition = INLINE_EXTENSIONS.has(extension) ? 'inline' : 'attachment';
+  // Strip characters that would break the quoted-string header value.
+  const safeName = name.replace(/["\r\n]/g, '');
+
+  const command = new GetObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    ResponseContentDisposition: `${disposition}; filename="${safeName}"`,
+  });
   return getSignedUrl(s3, command, { expiresIn: 3600 }); // 1 hour
 }

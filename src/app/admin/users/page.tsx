@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import NavBar from '@/components/NavBar';
 import PageHeader from '@/components/PageHeader';
+import PasswordInput from '@/components/PasswordInput';
 
 interface UserRow {
   id: string;
@@ -117,11 +118,10 @@ export default function AdminUsersPage() {
               type="email"
               className="rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
-            <input
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Temporary password"
-              type="password"
               className="rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
             <select
@@ -165,8 +165,7 @@ export default function AdminUsersPage() {
                   <td className="p-3 text-right">
                     {resettingUserId === u.id ? (
                       <div className="flex items-center justify-end gap-2">
-                        <input
-                          type="password"
+                        <PasswordInput
                           value={newPasswordDraft}
                           onChange={(e) => setNewPasswordDraft(e.target.value)}
                           placeholder="New password"

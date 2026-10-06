@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import PasswordInput from '@/components/PasswordInput';
 
 export default function SignupPage() {
   const params = useParams();
@@ -95,8 +96,7 @@ export default function SignupPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
-            <input
-              type="password"
+            <PasswordInput
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -105,8 +105,7 @@ export default function SignupPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Confirm password</label>
-            <input
-              type="password"
+            <PasswordInput
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}

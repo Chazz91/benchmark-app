@@ -10,6 +10,11 @@ import { resolveTicketType } from '@/lib/resolveTicketType';
 import { isExcludedFile } from '@/lib/fileExclusion';
 import { sendBulkTicketUploadAlertEmail } from '@/lib/email';
 
+// Loops over every file in the batch, each needing its own Claude call (resume parse or ticket
+// photo read) - give it real headroom instead of risking Vercel's default timeout partway
+// through a large batch.
+export const maxDuration = 300;
+
 const RESUME_NAME_HINTS = ['resume', 'cv'];
 const IMAGE_OR_PDF = /\.(pdf|jpg|jpeg|png|gif|webp)$/i;
 
@@ -59,6 +64,9 @@ export async function POST(request: Request) {
         if (!current.title && parsed.title) updateData.title = parsed.title;
         if (!current.yearsExperience && parsed.yearsExperience) updateData.yearsExperience = parsed.yearsExperience;
         if (!current.summary && parsed.summary) updateData.summary = parsed.summary;
+        if (current.discipline === 'ALL' && parsed.discipline && parsed.discipline !== 'ALL') {
+          updateData.discipline = parsed.discipline;
+        }
       }
       if (Object.keys(updateData).length > 0) {
         await prisma.consultant.update({ where: { id: consultant.id }, data: updateData });
@@ -160,6 +168,13 @@ export async function POST(request: Request) {
   const skippedForSafety = files.filter((f) => isExcludedFile(f.name) && !resumeFileNames.has(f.name));
   for (const f of skippedForSafety) {
     results.push({ fileName: f.name, type: 'skipped', message: 'Skipped for safety (sensitive filename)' });
+  }
+
+  const touchedProfile = results.some((r) => r.type === 'ticket') || allResumeFiles.length > 0;
+  if (touchedProfile) {
+    // Bump updatedAt so this activity shows up under "Recently Updated" sorting, even though
+    // no individual Consultant field necessarily changed (e.g. a duplicate ticket document).
+    await prisma.consultant.update({ where: { id: consultant.id }, data: {} });
   }
 
   if (addedTicketLabels.length > 0) {

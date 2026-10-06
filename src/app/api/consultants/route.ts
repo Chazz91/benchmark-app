@@ -16,6 +16,7 @@ export async function GET(request: Request) {
   const discipline = searchParams.get('discipline') || undefined;
   const keywordIdsParam = searchParams.get('keywordIds');
   const matchMode = searchParams.get('matchMode') === 'all' ? 'all' : 'any';
+  const sortBy = searchParams.get('sortBy') || 'name';
 
   const keywordIds = keywordIdsParam ? keywordIdsParam.split(',').filter(Boolean) : [];
 
@@ -46,13 +47,20 @@ export async function GET(request: Request) {
     }
   }
 
+  const orderBy: any =
+    sortBy === 'newest'
+      ? { createdAt: 'desc' }
+      : sortBy === 'updated'
+        ? { updatedAt: 'desc' }
+        : [{ lastName: 'asc' }, { firstName: 'asc' }];
+
   const consultants = await prisma.consultant.findMany({
     where,
     include: {
       keywords: { include: { keyword: true } },
       currentClient: true,
     },
-    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    orderBy,
     take: 100,
   });
 

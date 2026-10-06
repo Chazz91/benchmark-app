@@ -8,6 +8,9 @@ export interface ParsedKeyword {
   confidence: number; // 0-1
 }
 
+export type ParsedDiscipline = 'DRILLING' | 'COMPLETIONS' | 'LEASE_CONSTRUCTION' | 'ALL';
+const VALID_DISCIPLINES: ParsedDiscipline[] = ['DRILLING', 'COMPLETIONS', 'LEASE_CONSTRUCTION', 'ALL'];
+
 export interface ParsedResume {
   fullName?: string;
   email?: string;
@@ -16,8 +19,25 @@ export interface ParsedResume {
   title?: string;
   yearsExperience?: number;
   summary?: string;
+  discipline?: ParsedDiscipline;
   keywords: ParsedKeyword[];
 }
+
+const DISCIPLINE_RULES = `Rules for discipline - read the actual job titles and described work, then pick the ONE that
+fits best. Most resumes clearly belong to one discipline - only use "ALL" when the resume
+genuinely shows substantial, ongoing experience in more than one, which is rare:
+- DRILLING: drilling rig crews and supervision - floorhand, derrickhand, motorhand, driller,
+  rig manager, tool push, directional driller, drilling engineer, mud logger, wellsite
+  supervisor/consultant on a drilling rig.
+- COMPLETIONS: completions/service rig work - completions technician/supervisor, service rig
+  crews, workover, frac/fracturing, wireline, well testing, recompletions, well abandonments,
+  flowback.
+- LEASE_CONSTRUCTION: lease site prep, access roads, civil/earthworks work supporting oil & gas
+  operations (not the drilling or completions work itself).
+- ALL: only when the work history shows real, substantial experience across more than one of
+  the above - not just because the resume is vague or you're unsure. If the resume doesn't
+  give you enough to tell, prefer the discipline implied by their most recent/primary role over
+  defaulting to ALL.`;
 
 const EXTRACTION_PROMPT = `You are extracting structured data from an oil & gas industry resume for a staffing database.
 
@@ -30,11 +50,14 @@ Read the resume text and return ONLY a JSON object (no markdown fences, no pream
   "location": string | null,       // city and province, e.g. "Grande Prairie, AB" — if only one is present, include just that
   "title": string | null,          // e.g. "Drilling Engineer", "Wellsite Geologist"
   "yearsExperience": number | null,
-  "summary": string | null,        // 2-3 sentence professional summary, in your own words
+  "summary": string | null,        // third person, information-dense — name EVERY employer in the work history (don't drop any for length), plus formations, rig types, and quantified experience actually stated in the resume, rather than generic filler ("skilled", "proven track record"); a shorter honest summary beats a padded vague one; do NOT mention certifications/tickets (H2S Alive, IWCF, RigPass, etc.) — those are tracked separately
+  "discipline": "DRILLING" | "COMPLETIONS" | "LEASE_CONSTRUCTION" | "ALL",
   "keywords": [
     { "label": string, "type": "FORMATION" | "RIG_TYPE" | "SKILL" | "CERTIFICATION" | "SOFTWARE", "confidence": number }
   ]
 }
+
+${DISCIPLINE_RULES}
 
 Rules for keywords:
 - FORMATION: named Western Canadian geological formations/basins the person has worked (e.g. "Montney", "Duvernay", "Cardium", "Viking", "Clearwater"). This is a Western Canadian oil & gas company — do not tag US formations (e.g. Permian, Eagle Ford, Marcellus) even if mentioned; if a US formation is the only thing mentioned, skip it rather than mistranslating it to a Canadian one.
@@ -71,9 +94,91 @@ export async function parseResumeText(resumeText: string): Promise<ParsedResume>
     const parsed = JSON.parse(cleaned) as ParsedResume;
     // Defensive defaults
     parsed.keywords = Array.isArray(parsed.keywords) ? parsed.keywords : [];
+    if (!VALID_DISCIPLINES.includes(parsed.discipline as ParsedDiscipline)) {
+      parsed.discipline = undefined;
+    }
     return parsed;
   } catch (err) {
     throw new Error(`Failed to parse resume extraction response: ${(err as Error).message}`);
+  }
+}
+
+// Lightweight, discipline-only classification - used to backfill consultants who are still
+// sitting at the "All / Multiple" default because they were imported before discipline was
+// part of the full extraction above. Much cheaper than re-running parseResumeText, since it
+// doesn't need to also re-extract keywords/summary/etc. for a profile that's otherwise fine.
+export async function inferDisciplineFromResume(rawText: string): Promise<ParsedDiscipline | null> {
+  const prompt = `Read this oil & gas industry resume and classify which discipline it belongs
+to. Return ONLY a JSON object (no markdown fences, no preamble): { "discipline": "DRILLING" | "COMPLETIONS" | "LEASE_CONSTRUCTION" | "ALL" }
+
+${DISCIPLINE_RULES}
+
+Resume text:
+"""
+${rawText.slice(0, 15000)}
+"""`;
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 50,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const textBlock = response.content.find((b) => b.type === 'text');
+  if (!textBlock || textBlock.type !== 'text') return null;
+
+  const cleaned = textBlock.text.replace(/```json|```/g, '').trim();
+  try {
+    const parsed = JSON.parse(cleaned) as { discipline?: string };
+    return VALID_DISCIPLINES.includes(parsed.discipline as ParsedDiscipline)
+      ? (parsed.discipline as ParsedDiscipline)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface ServiceOrderDates {
+  startDate: string | null; // YYYY-MM-DD
+  endDate: string | null; // YYYY-MM-DD
+}
+
+// Pulls the effective start/end dates out of a service order sheet's "Term" section
+// (e.g. Cenovus service orders: "this Service Order shall start on 2026-05-26 and continue
+// until 2027-05-25"). Used to auto-fill the date fields when one is uploaded, so staff don't
+// have to retype dates that are already sitting in the document.
+export async function extractServiceOrderDates(text: string): Promise<ServiceOrderDates> {
+  const prompt = `Find the effective start and end dates in this service order / contract
+document (usually in a "Term" section, e.g. "this Service Order shall start on 2026-05-26 and
+continue until 2027-05-25"). Return ONLY a JSON object, no markdown fences, no preamble:
+
+{ "startDate": "YYYY-MM-DD" | null, "endDate": "YYYY-MM-DD" | null }
+
+If a date isn't clearly present, use null rather than guessing.
+
+Document text:
+"""
+${text.slice(0, 15000)}
+"""`;
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 200,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const textBlock = response.content.find((b) => b.type === 'text');
+  if (!textBlock || textBlock.type !== 'text') {
+    throw new Error('No response from service order date extraction');
+  }
+
+  const cleaned = textBlock.text.replace(/```json|```/g, '').trim();
+
+  try {
+    const parsed = JSON.parse(cleaned) as ServiceOrderDates;
+    return { startDate: parsed.startDate || null, endDate: parsed.endDate || null };
+  } catch (err) {
+    throw new Error(`Failed to parse service order date extraction response: ${(err as Error).message}`);
   }
 }
 
@@ -116,12 +221,41 @@ export async function regenerateConsultantSummary(
   lastName: string,
   title: string | null
 ): Promise<string> {
-  const prompt = `Write a 3-5 sentence, third-person professional summary for an oil & gas
-consultant, based on their resume text below. Mention their name (${firstName} ${lastName}),
-their role${title ? ` (${title})` : ''}, years of experience, and key technical areas (specific
-formations, rig types, drilling/completions techniques, safety record) if actually mentioned in
-the resume. Confident, specific, professional tone. Never invent facts not present in the
-resume text. Return ONLY the summary paragraph - no preamble, no quotation marks, no markdown.
+  const prompt = `Write a sharp, information-dense professional summary for an oil & gas
+consultant, in the third person, based on the resume text below. This goes on a searchable
+staffing profile, so it should read like a technical recruiter wrote it - packed with real
+specifics pulled from the resume, not generic filler. Usually 3-5 sentences is enough, but if
+their work history has many employers, use as many sentences as it takes to name every one of
+them rather than dropping any for length.
+
+Their name is ${firstName} ${lastName}${title ? `, role: ${title}` : ''}. Beyond that, pull in
+whatever of the following actually appears in the resume text:
+- Total years of experience, and/or years in specific positions
+- EVERY employer/company named in the resume's work history - list all of them, not just the
+  most recent or most notable one. If the resume names five companies, the summary should
+  reflect all five.
+- Named formations/basins worked (e.g. Montney, Duvernay, Cardium, Viking)
+- Named rig types (e.g. Pad-Walking Rig, Super-Single Rig, Service Rig)
+- Specific technical disciplines/techniques (e.g. directional drilling, SAGD, MPD, UBD, well control)
+- Concrete achievements or scale (number of wells, rig-years, notable projects, safety
+  record/TRIF, promotions)
+
+Do NOT mention certifications or tickets (H2S Alive, IWCF, RigPass, etc.) even if they appear in
+the resume - those are tracked separately on the consultant's profile and don't belong in this
+summary.
+
+Rules:
+- Every claim must be directly supported by the resume text - never invent, infer, or round up
+  a number that isn't stated.
+- Every company named in the work history must be mentioned - don't drop any for length; trim
+  other details instead if the sentence count is getting tight.
+- Prefer concrete nouns (named formations, rig types, employers, numbers) over vague adjectives
+  ("skilled", "proven track record", "excellent communicator") - only reach for a vague
+  descriptor when there's genuinely nothing concrete to say instead.
+- If the resume is thin on specifics, write a shorter, honest summary rather than padding it out
+  with generic claims.
+- Confident, professional tone. Return ONLY the summary paragraph - no preamble, no quotation
+  marks, no markdown.
 
 Resume text:
 """

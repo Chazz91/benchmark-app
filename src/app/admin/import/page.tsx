@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import NavBar from '@/components/NavBar';
 import PageHeader from '@/components/PageHeader';
+import FileDropzone from '@/components/FileDropzone';
 
 interface ImportResult {
   created: number;
@@ -339,7 +340,7 @@ function ResumeImportSection() {
         Consultants search filters.
       </p>
 
-      <div className="mt-3">
+      <FileDropzone onFiles={(dropped) => setFiles(dropped)} disabled={uploading} className="mt-3 bg-slate-50">
         <input
           type="file"
           accept=".pdf,.docx"
@@ -350,7 +351,8 @@ function ResumeImportSection() {
         {files.length > 0 && (
           <p className="mt-1 text-xs text-slate-500">{files.length} file(s) selected</p>
         )}
-      </div>
+        <p className="mt-1 text-xs text-slate-500">or drag and drop resumes here</p>
+      </FileDropzone>
 
       <button
         onClick={handleUpload}
@@ -473,6 +475,65 @@ function ImportSection({
   );
 }
 
+function BackfillDisciplineSection() {
+  const [running, setRunning] = useState(false);
+  const [results, setResults] = useState<{ name: string; status: string; message: string }[] | null>(null);
+  const [summary, setSummary] = useState<{ checkedCount: number; updatedCount: number } | null>(null);
+
+  async function handleRun() {
+    setRunning(true);
+    setResults(null);
+    setSummary(null);
+
+    const res = await fetch('/api/admin/consultants/backfill-discipline', { method: 'POST' });
+    const data = await res.json();
+    setRunning(false);
+
+    if (!res.ok) {
+      alert(data.error || 'Failed to run backfill');
+      return;
+    }
+    setResults(data.results);
+    setSummary({ checkedCount: data.checkedCount, updatedCount: data.updatedCount });
+  }
+
+  return (
+    <div className="rounded-2xl border border-gold-400/50 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-brand-900">Backfill Missing Disciplines</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        One-time cleanup for consultants imported before discipline was read from their resume,
+        who are still sitting at the "All / Multiple" default. Reads each one's most recent
+        resume on file and reclassifies just the discipline field - nothing else on the profile
+        is touched.
+      </p>
+
+      <button
+        onClick={handleRun}
+        disabled={running}
+        className="mt-3 rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
+      >
+        {running ? 'Checking consultants…' : 'Run Backfill'}
+      </button>
+
+      {summary && (
+        <p className="mt-3 text-sm text-green-700">
+          Checked {summary.checkedCount} consultant(s) at "All", updated {summary.updatedCount}.
+        </p>
+      )}
+
+      {results && results.length > 0 && (
+        <ul className="mt-3 max-h-64 space-y-1 overflow-y-auto text-sm">
+          {results.map((r, i) => (
+            <li key={i} className={r.status === 'error' ? 'text-red-700' : 'text-slate-700'}>
+              <span className="font-medium">{r.name}</span>: {r.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function ImportPage() {
   return (
     <div>
@@ -482,6 +543,7 @@ export default function ImportPage() {
         <div className="space-y-6">
           <FolderImportSection />
           <ResumeImportSection />
+          <BackfillDisciplineSection />
 
           <div>
             <p className="mb-3 text-sm text-slate-500">

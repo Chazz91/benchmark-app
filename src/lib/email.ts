@@ -38,6 +38,23 @@ export async function sendInviteEmail(to: string, firstName: string, token: stri
   });
 }
 
+// For an existing consultant record who hasn't set up their own login yet - different wording
+// than sendInviteEmail above, which is for a job applicant whose application was just accepted.
+export async function sendConsultantProfileInviteEmail(to: string, firstName: string, token: string) {
+  const link = `${APP_URL}/signup/${token}`;
+  await send({
+    from: FROM,
+    to,
+    subject: 'Set up your Benchmark Engineering Connect profile',
+    html: `
+      <p>Hi ${firstName},</p>
+      <p>You're on file with Benchmark Engineering — click the link below to set a password and access your profile, where you can keep your tickets and resume up to date:</p>
+      <p><a href="${link}">${link}</a></p>
+      <p>This link expires in 7 days.</p>
+    `,
+  });
+}
+
 export async function sendTicketExpiryEmail(
   to: string,
   firstName: string,
@@ -121,6 +138,45 @@ export async function sendTicketUploadedAlertEmail(
     html: `
       <p><strong>${consultantName}</strong> just added or updated a ticket on their profile:</p>
       <p><strong>${ticketTypeLabel}</strong> — ${expiryText}</p>
+      <p><a href="${APP_URL}/consultants/${consultantId}">View their profile</a></p>
+    `,
+  });
+}
+
+export async function sendResumeUploadedAlertEmail(
+  adminEmails: string[],
+  consultantName: string,
+  consultantId: string,
+  fileName: string
+) {
+  if (adminEmails.length === 0) return;
+
+  await send({
+    from: FROM,
+    to: adminEmails,
+    subject: `${consultantName} uploaded a new resume`,
+    html: `
+      <p><strong>${consultantName}</strong> just uploaded a new resume: <strong>${fileName}</strong>.</p>
+      <p><a href="${APP_URL}/consultants/${consultantId}">View their profile</a></p>
+    `,
+  });
+}
+
+export async function sendProfileUpdatedAlertEmail(
+  adminEmails: string[],
+  consultantName: string,
+  consultantId: string,
+  changedFields: string[]
+) {
+  if (adminEmails.length === 0 || changedFields.length === 0) return;
+
+  await send({
+    from: FROM,
+    to: adminEmails,
+    subject: `${consultantName} updated their profile`,
+    html: `
+      <p><strong>${consultantName}</strong> just updated their profile — changed:</p>
+      <ul>${changedFields.map((f) => `<li>${f}</li>`).join('')}</ul>
       <p><a href="${APP_URL}/consultants/${consultantId}">View their profile</a></p>
     `,
   });
@@ -212,7 +268,9 @@ export async function sendPersonalizedConsultantEmails(
     `;
 
     try {
-      await send({ from: FROM, to: recipient.email, replyTo: senderEmail, subject, html });
+      // Sent from the actual staff member's own @benchmarkeng.ca address (not the generic
+      // FROM) so a reply goes straight to them and looks like a real person reached out.
+      await send({ from: `${senderName} <${senderEmail}>`, to: recipient.email, subject, html });
       results.push({ email: recipient.email, success: true });
     } catch (err) {
       // One bad address shouldn't block everyone else in the group from getting theirs.

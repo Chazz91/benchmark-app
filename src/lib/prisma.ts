@@ -5,6 +5,13 @@ import ws from 'ws';
 
 // Node < 22 has no global WebSocket; harmless to set on newer runtimes too.
 neonConfig.webSocketConstructor = ws;
+// Vercel freezes serverless functions between invocations, so a pooled WebSocket
+// connection often gets closed by Neon during the freeze; the next query on a
+// reused (warm) container then fails with "Connection terminated unexpectedly".
+// Routing plain pool queries over HTTP instead avoids depending on a
+// long-lived connection surviving the freeze. Explicit transactions still use
+// a real WebSocket-backed client, so this doesn't affect $transaction.
+neonConfig.poolQueryViaFetch = true;
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 

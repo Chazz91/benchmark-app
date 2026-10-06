@@ -52,6 +52,7 @@ export async function POST(request: Request) {
           title: parsed.title || undefined,
           yearsExperience: parsed.yearsExperience || undefined,
           summary: parsed.summary || undefined,
+          discipline: parsed.discipline || 'ALL',
           status: 'ACTIVE',
           createdById: session.user.id,
         },
@@ -63,6 +64,11 @@ export async function POST(request: Request) {
       if (!consultant.title && parsed.title) updateData.title = parsed.title;
       if (!consultant.yearsExperience && parsed.yearsExperience) updateData.yearsExperience = parsed.yearsExperience;
       if (!consultant.summary && parsed.summary) updateData.summary = parsed.summary;
+      // Only replace discipline if it's still sitting at the default - never overrides a
+      // deliberate choice an admin already made on this profile.
+      if (consultant.discipline === 'ALL' && parsed.discipline && parsed.discipline !== 'ALL') {
+        updateData.discipline = parsed.discipline;
+      }
       if (Object.keys(updateData).length > 0) {
         consultant = await prisma.consultant.update({ where: { id: consultant.id }, data: updateData });
       }

@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import NavBar from '@/components/NavBar';
 import PageHeader from '@/components/PageHeader';
+import FileDropzone from '@/components/FileDropzone';
+import { opensInlineInBrowser } from '@/lib/fileDisplay';
 
 interface ConsultantDetail {
   id: string;
@@ -23,10 +25,15 @@ interface ConsultantDetail {
   summary: string | null;
   otherFormationNotes: string | null;
   userId: string | null;
+  serviceOrderSheetUrl: string | null;
+  serviceOrderSheetFileName: string | null;
+  serviceOrderSheetStartDate: string | null;
+  serviceOrderSheetEndDate: string | null;
   keywords: { keyword: { id: string; label: string; type: string }; source: string; confidence: number | null }[];
   resumes: { id: string; fileName: string; createdAt: string; isFormatted: boolean }[];
   tickets: {
     id: string;
+    issueDate: string;
     expiryDate: string | null;
     documentUrl: string | null;
     ticketType: { label: string };
@@ -89,6 +96,24 @@ export default function ConsultantDetailPage() {
   const [profileLinkCopied, setProfileLinkCopied] = useState(false);
   const [copyingInvite, setCopyingInvite] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [sosFile, setSosFile] = useState<File | null>(null);
+  const [sosStartDate, setSosStartDate] = useState('');
+  const [sosEndDate, setSosEndDate] = useState('');
+  const [sosUploading, setSosUploading] = useState(false);
+  const [sosMessage, setSosMessage] = useState('');
+  const [sosDeleting, setSosDeleting] = useState(false);
+  const [sosParsingDates, setSosParsingDates] = useState(false);
+  const [ticketUploadFiles, setTicketUploadFiles] = useState<File[]>([]);
+  const [ticketUploading, setTicketUploading] = useState(false);
+  const [ticketUploadResults, setTicketUploadResults] = useState<
+    { fileName: string; type: string; message: string }[] | null
+  >(null);
+  const [editingTicketId, setEditingTicketId] = useState<string | null>(null);
+  const [editIssueDate, setEditIssueDate] = useState('');
+  const [editExpiryDate, setEditExpiryDate] = useState('');
+  const [editNoExpiry, setEditNoExpiry] = useState(false);
+  const [savingTicket, setSavingTicket] = useState(false);
+  const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch(`/api/consultants/${id}`)
@@ -279,8 +304,146 @@ export default function ConsultantDetailPage() {
     }
   }
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handleSosFileSelected(file: File | null) {
+    setSosFile(file);
+    if (!file) return;
+
+    setSosParsingDates(true);
+    setSosMessage('Reading dates from the document…');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/admin/service-order-sheet/parse-dates', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.startDate) setSosStartDate(data.startDate);
+      if (data.endDate) setSosEndDate(data.endDate);
+      setSosMessage(
+        data.startDate || data.endDate
+          ? 'Dates filled in from the document — double-check them below before uploading.'
+          : "Couldn't find dates in the document — enter them manually below."
+      );
+    } catch {
+      setSosMessage("Couldn't read dates from the document — enter them manually below.");
+    } finally {
+      setSosParsingDates(false);
+    }
+  }
+
+  async function handleSosUpload() {
+    if (!sosFile) return;
+    setSosUploading(true);
+    setSosMessage('');
+
+    const formData = new FormData();
+    formData.append('file', sosFile);
+    if (sosStartDate) formData.append('startDate', sosStartDate);
+    if (sosEndDate) formData.append('endDate', sosEndDate);
+
+    const res = await fetch(`/api/consultants/${id}/service-order-sheet`, { method: 'POST', body: formData });
+    const data = await res.json();
+    setSosUploading(false);
+
+    if (!res.ok) {
+      setSosMessage(data.error || 'Upload failed');
+      return;
+    }
+    setSosFile(null);
+    setSosStartDate('');
+    setSosEndDate('');
+    setSosMessage('Uploaded.');
+    load();
+  }
+
+  async function handleSosDelete() {
+    const confirmed = window.confirm('Remove the service order sheet on file for this consultant?');
+    if (!confirmed) return;
+
+    setSosDeleting(true);
+    await fetch(`/api/consultants/${id}/service-order-sheet`, { method: 'DELETE' });
+    setSosDeleting(false);
+    load();
+  }
+
+  async function handleTicketUpload() {
+    if (ticketUploadFiles.length === 0) return;
+
+    setTicketUploading(true);
+    setTicketUploadResults(null);
+    const formData = new FormData();
+    ticketUploadFiles.forEach((f) => formData.append('files', f));
+
+    try {
+      const res = await fetch(`/api/consultants/${id}/tickets/upload`, { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || 'Failed to upload ticket(s)');
+        return;
+      }
+
+      setTicketUploadResults(data.results);
+      setTicketUploadFiles([]);
+      load();
+    } catch (err) {
+      // A timed-out or otherwise failed request can come back as something other than JSON
+      // (e.g. a gateway error page) - without this, res.json() above would throw and leave
+      // the button stuck on "Reading..." forever with no indication anything went wrong.
+      alert(
+        'Upload failed or timed out - this can happen with a very large photo. Try a smaller image, or fewer at once.'
+      );
+      console.error('Ticket upload failed:', err);
+    } finally {
+      setTicketUploading(false);
+    }
+  }
+
+  function startEditingTicket(ticket: ConsultantDetail['tickets'][number]) {
+    setEditingTicketId(ticket.id);
+    setEditIssueDate(ticket.issueDate.slice(0, 10));
+    setEditExpiryDate(ticket.expiryDate ? ticket.expiryDate.slice(0, 10) : '');
+    setEditNoExpiry(!ticket.expiryDate);
+  }
+
+  async function handleSaveTicket(ticketId: string) {
+    if (!editIssueDate || (!editNoExpiry && !editExpiryDate)) {
+      alert('Issue date and expiry date (or no-expiry) are required');
+      return;
+    }
+    setSavingTicket(true);
+    const res = await fetch(`/api/tickets/${ticketId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        issueDate: editIssueDate,
+        expiryDate: editNoExpiry ? null : editExpiryDate,
+        noExpiry: editNoExpiry,
+      }),
+    });
+    setSavingTicket(false);
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || 'Failed to save ticket');
+      return;
+    }
+    setEditingTicketId(null);
+    load();
+  }
+
+  async function handleDeleteTicket(ticketId: string, label: string) {
+    const confirmed = window.confirm(`Delete the ${label} ticket for this consultant? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setDeletingTicketId(ticketId);
+    const res = await fetch(`/api/tickets/${ticketId}`, { method: 'DELETE' });
+    setDeletingTicketId(null);
+    if (!res.ok) {
+      alert('Failed to delete ticket');
+      return;
+    }
+    load();
+  }
+
+  async function handleUpload(file: File | undefined) {
     if (!file) return;
 
     setUploading(true);
@@ -503,8 +666,8 @@ export default function ConsultantDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-5">
-              <div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
+              <div className="min-w-0">
                 <p className="text-xs text-slate-400">Discipline</p>
                 <p className="text-slate-700">
                   {consultant.discipline === 'DRILLING' && 'Drilling'}
@@ -513,33 +676,36 @@ export default function ConsultantDetailPage() {
                   {consultant.discipline === 'ALL' && 'All / Multiple'}
                 </p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-slate-400">Job Title</p>
-                <p className="text-slate-700">{consultant.title || 'Not on file'}</p>
+                <p className="truncate text-slate-700">{consultant.title || 'Not on file'}</p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-slate-400">Email</p>
                 {consultant.email ? (
-                  <a href={`mailto:${consultant.email}`} className="text-brand-700 hover:underline">
+                  <a
+                    href={`mailto:${consultant.email}`}
+                    className="block break-words text-brand-700 hover:underline"
+                  >
                     {consultant.email}
                   </a>
                 ) : (
                   <p className="text-slate-400">Not on file</p>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-slate-400">Phone</p>
                 {consultant.phone ? (
-                  <a href={`tel:${consultant.phone}`} className="text-brand-700 hover:underline">
+                  <a href={`tel:${consultant.phone}`} className="block break-words text-brand-700 hover:underline">
                     {consultant.phone}
                   </a>
                 ) : (
                   <p className="text-slate-400">Not on file</p>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-slate-400">Location</p>
-                <p className="text-slate-700">{consultant.location || 'Not on file'}</p>
+                <p className="truncate text-slate-700">{consultant.location || 'Not on file'}</p>
               </div>
             </div>
           )}
@@ -629,14 +795,115 @@ export default function ConsultantDetailPage() {
 
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-800">Tickets (Certifications)</h2>
+
+          <FileDropzone
+            onFiles={(files) => setTicketUploadFiles(files)}
+            disabled={ticketUploading}
+            className="mb-4 bg-slate-50"
+          >
+            <p className="mb-2 text-xs text-slate-500">
+              Upload a ticket photo or PDF, or drag and drop it here — it reads the certification
+              name and issue/expiry dates automatically. Unlike the general file uploader below,
+              everything here is always saved as a ticket, never mistaken for a resume.
+            </p>
+            <input
+              type="file"
+              multiple
+              accept="image/*,.pdf"
+              onChange={(e) => setTicketUploadFiles(Array.from(e.target.files || []))}
+              disabled={ticketUploading}
+              className="text-sm"
+            />
+            {ticketUploadFiles.length > 0 && (
+              <p className="mt-1 text-xs text-slate-500">{ticketUploadFiles.length} file(s) selected</p>
+            )}
+            <div>
+              <button
+                onClick={handleTicketUpload}
+                disabled={ticketUploadFiles.length === 0 || ticketUploading}
+                className="mt-2 rounded-lg bg-brand-800 px-4 py-1.5 text-sm font-bold text-white hover:bg-brand-900 disabled:opacity-50"
+              >
+                {ticketUploading ? 'Reading…' : 'Upload Ticket(s)'}
+              </button>
+            </div>
+            {ticketUploadResults && (
+              <ul className="mt-3 space-y-1 text-xs">
+                {ticketUploadResults.map((r, i) => (
+                  <li
+                    key={i}
+                    className={
+                      r.type === 'error' ? 'text-red-700' : r.type === 'skipped' ? 'text-slate-400' : 'text-slate-600'
+                    }
+                  >
+                    <span className="font-medium">{r.fileName}</span>: {r.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </FileDropzone>
+
           {consultant.tickets.length === 0 ? (
             <p className="text-sm text-slate-400">No tickets on file yet.</p>
           ) : (
-            <ul className="space-y-1 text-sm">
+            <ul className="space-y-2 text-sm">
               {consultant.tickets.map((t) => {
                 const days = t.expiryDate ? daysUntil(t.expiryDate) : null;
+                const isEditing = editingTicketId === t.id;
+
+                if (isEditing) {
+                  return (
+                    <li key={t.id} className="rounded-lg border border-slate-200 p-3">
+                      <p className="mb-2 font-medium text-slate-700">{t.ticketType.label}</p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-xs text-slate-400">Issue Date</label>
+                          <input
+                            type="date"
+                            value={editIssueDate}
+                            onChange={(e) => setEditIssueDate(e.target.value)}
+                            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs text-slate-400">Expiry Date</label>
+                          <input
+                            type="date"
+                            value={editExpiryDate}
+                            onChange={(e) => setEditExpiryDate(e.target.value)}
+                            disabled={editNoExpiry}
+                            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                          />
+                        </div>
+                      </div>
+                      <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={editNoExpiry}
+                          onChange={(e) => setEditNoExpiry(e.target.checked)}
+                        />
+                        This ticket doesn&apos;t expire
+                      </label>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          onClick={() => handleSaveTicket(t.id)}
+                          disabled={savingTicket}
+                          className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {savingTicket ? 'Saving…' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => setEditingTicketId(null)}
+                          className="rounded-md bg-slate-100 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </li>
+                  );
+                }
+
                 return (
-                  <li key={t.id} className="flex items-center justify-between">
+                  <li key={t.id} className="flex items-center justify-between gap-2">
                     <span className="text-slate-700">
                       {t.ticketType.label}
                       {t.documentUrl && (
@@ -653,20 +920,112 @@ export default function ConsultantDetailPage() {
                         </>
                       )}
                     </span>
-                    {days === null ? (
-                      <span className="text-slate-400">N/A (no expiry)</span>
-                    ) : (
-                      <span className={days < 0 ? 'text-red-600' : days <= 60 ? 'text-amber-600' : 'text-slate-500'}>
-                        {days < 0
-                          ? `Expired ${new Date(t.expiryDate!).toLocaleDateString('en-CA')}`
-                          : `Expires ${new Date(t.expiryDate!).toLocaleDateString('en-CA')}`}
-                      </span>
-                    )}
+                    <span className="flex items-center gap-2">
+                      {days === null ? (
+                        <span className="text-slate-400">N/A (no expiry)</span>
+                      ) : (
+                        <span className={days < 0 ? 'text-red-600' : days <= 60 ? 'text-amber-600' : 'text-slate-500'}>
+                          {days < 0
+                            ? `Expired ${new Date(t.expiryDate!).toLocaleDateString('en-CA')}`
+                            : `Expires ${new Date(t.expiryDate!).toLocaleDateString('en-CA')}`}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => startEditingTicket(t)}
+                        className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTicket(t.id, t.ticketType.label)}
+                        disabled={deletingTicketId === t.id}
+                        className="rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                      >
+                        {deletingTicketId === t.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    </span>
                   </li>
                 );
               })}
             </ul>
           )}
+        </div>
+
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">Service Order Sheet</h2>
+          {consultant.serviceOrderSheetFileName ? (
+            <div className="mb-3 flex items-center justify-between text-sm">
+              <span>
+                <a
+                  href={`/api/consultants/${id}/service-order-sheet`}
+                  {...(opensInlineInBrowser(consultant.serviceOrderSheetFileName)
+                    ? { target: '_blank', rel: 'noreferrer' }
+                    : {})}
+                  className="text-brand-700 hover:underline"
+                >
+                  {consultant.serviceOrderSheetFileName}
+                </a>
+                {(consultant.serviceOrderSheetStartDate || consultant.serviceOrderSheetEndDate) && (
+                  <span className="ml-2 text-xs text-slate-500">
+                    {consultant.serviceOrderSheetStartDate &&
+                      new Date(consultant.serviceOrderSheetStartDate).toLocaleDateString('en-CA')}
+                    {consultant.serviceOrderSheetStartDate && consultant.serviceOrderSheetEndDate && ' – '}
+                    {consultant.serviceOrderSheetEndDate &&
+                      new Date(consultant.serviceOrderSheetEndDate).toLocaleDateString('en-CA')}
+                  </span>
+                )}
+              </span>
+              <button
+                onClick={handleSosDelete}
+                disabled={sosDeleting}
+                className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
+              >
+                {sosDeleting ? 'Removing…' : 'Remove'}
+              </button>
+            </div>
+          ) : (
+            <p className="mb-3 text-sm text-slate-400">No service order sheet on file yet.</p>
+          )}
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">Start date (optional)</label>
+              <input
+                type="date"
+                value={sosStartDate}
+                onChange={(e) => setSosStartDate(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">End date (optional)</label>
+              <input
+                type="date"
+                value={sosEndDate}
+                onChange={(e) => setSosEndDate(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">File</label>
+              <FileDropzone onFiles={(files) => handleSosFileSelected(files[0] || null)} disabled={sosParsingDates}>
+                <input
+                  type="file"
+                  onChange={(e) => handleSosFileSelected(e.target.files?.[0] || null)}
+                  disabled={sosParsingDates}
+                  className="w-full text-sm"
+                />
+              </FileDropzone>
+            </div>
+          </div>
+          <button
+            onClick={handleSosUpload}
+            disabled={!sosFile || sosUploading || sosParsingDates}
+            className="mt-3 rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
+          >
+            {sosUploading ? 'Uploading…' : consultant.serviceOrderSheetFileName ? 'Replace' : 'Upload'}
+          </button>
+          {sosMessage && <p className="mt-2 text-xs text-slate-500">{sosMessage}</p>}
         </div>
 
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
@@ -734,8 +1093,7 @@ export default function ConsultantDetailPage() {
                 <span>
                   <a
                     href={`/api/resumes/${r.id}/view`}
-                    target="_blank"
-                    rel="noreferrer"
+                    {...(opensInlineInBrowser(r.fileName) ? { target: '_blank', rel: 'noreferrer' } : {})}
                     className="text-brand-700 hover:underline"
                   >
                     {r.fileName}
@@ -770,18 +1128,29 @@ export default function ConsultantDetailPage() {
             {generateMessage && <p className="mt-2 text-xs text-slate-500">{generateMessage}</p>}
           </div>
 
-          <label className="inline-block cursor-pointer rounded-lg bg-gold-500 px-4 py-2 text-sm font-bold text-brand-900 hover:bg-gold-600">
-            {uploading ? 'Processing…' : 'Upload resume (PDF/DOCX)'}
-            <input type="file" accept=".pdf,.docx" className="hidden" onChange={handleUpload} disabled={uploading} />
-          </label>
+          <FileDropzone onFiles={(files) => handleUpload(files[0])} disabled={uploading} className="inline-block">
+            <label className="inline-block cursor-pointer rounded-lg bg-gold-500 px-4 py-2 text-sm font-bold text-brand-900 hover:bg-gold-600">
+              {uploading ? 'Processing…' : 'Upload resume (PDF/DOCX)'}
+              <input
+                type="file"
+                accept=".pdf,.docx"
+                className="hidden"
+                onChange={(e) => handleUpload(e.target.files?.[0])}
+                disabled={uploading}
+              />
+            </label>
+            <p className="mt-1 text-xs text-slate-500">or drag and drop a file here</p>
+          </FileDropzone>
           {uploadMessage && <p className="mt-2 text-xs text-slate-500">{uploadMessage}</p>}
 
           <div className="mt-4 border-t border-slate-100 pt-4">
             <h3 className="mb-1 text-sm font-semibold text-slate-800">Upload Multiple Files</h3>
+            <FileDropzone onFiles={(files) => setBulkFiles(files)} disabled={bulkUploading} className="bg-slate-50">
             <p className="mb-2 text-xs text-slate-500">
               Select several files at once (updated resumes, certification photos, driver&apos;s
-              license, etc.) &mdash; it automatically figures out which is which, the same way the
-              Bulk Folder Import does. Sensitive-named files are skipped automatically.
+              license, etc.), or drag and drop them here &mdash; it automatically figures out
+              which is which, the same way the Bulk Folder Import does. Sensitive-named files are
+              skipped automatically.
             </p>
             <input
               type="file"
@@ -820,6 +1189,7 @@ export default function ConsultantDetailPage() {
                 ))}
               </ul>
             )}
+            </FileDropzone>
           </div>
         </div>
       </main>

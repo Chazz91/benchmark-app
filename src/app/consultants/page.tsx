@@ -25,6 +25,8 @@ interface Consultant {
   currentClient: { name: string } | null;
   location: string | null;
   yearsExperience: number | null;
+  email: string | null;
+  userId: string | null;
   keywords: { keyword: Keyword; source: string }[];
 }
 
@@ -36,17 +38,23 @@ const TYPE_LABELS: Record<KeywordType, string> = {
   SOFTWARE: 'Software',
 };
 
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
 export default function ConsultantsPage() {
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [matchMode, setMatchMode] = useState<'any' | 'all'>('any');
+  const [keywordFilter, setKeywordFilter] = useState('');
+  const [openCategories, setOpenCategories] = useState<Set<KeywordType>>(new Set());
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [discipline, setDiscipline] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'newest' | 'updated'>('name');
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [composeOpen, setComposeOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   // Load full keyword taxonomy once, for the toggle panel
   useEffect(() => {
@@ -63,12 +71,13 @@ export default function ConsultantsPage() {
     if (discipline) params.set('discipline', discipline);
     if (selected.size > 0) params.set('keywordIds', Array.from(selected).join(','));
     params.set('matchMode', matchMode);
+    params.set('sortBy', sortBy);
 
     fetch(`/api/consultants?${params.toString()}`)
       .then((r) => r.json())
       .then((d) => setConsultants(d.consultants || []))
       .finally(() => setLoading(false));
-  }, [query, status, discipline, selected, matchMode]);
+  }, [query, status, discipline, selected, matchMode, sortBy]);
 
   useEffect(() => {
     runSearch();
@@ -79,7 +88,7 @@ export default function ConsultantsPage() {
     const t = setTimeout(runSearch, 300); // debounce toggles/search
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, matchMode, status, discipline]);
+  }, [selected, matchMode, status, discipline, sortBy]);
 
   function toggleKeyword(id: string) {
     setSelected((prev) => {
@@ -87,6 +96,18 @@ export default function ConsultantsPage() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  }
+
+  function toggleCategory(type: KeywordType) {
+    setOpenCategories((prev) => {
+      const next = new Set(prev);
+      next.has(type) ? next.delete(type) : next.add(type);
+      return next;
+    });
+  }
+
+  function jumpToLetter(letter: string) {
+    document.getElementById(`consultant-letter-${letter}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function toggleChecked(id: string) {
@@ -109,6 +130,16 @@ export default function ConsultantsPage() {
     (acc[kw.type] ||= []).push(kw);
     return acc;
   }, {});
+
+  const filterActive = keywordFilter.trim().length > 0;
+  const matchesFilter = (label: string) => label.toLowerCase().includes(keywordFilter.trim().toLowerCase());
+
+  // Letters present at the start of each consultant's last name, in the order they first
+  // appear - only meaningful while sorted by name, which is when the jump strip is shown.
+  const lettersPresent = new Set(
+    sortBy === 'name' ? consultants.map((c) => c.lastName[0]?.toUpperCase()).filter(Boolean) : []
+  );
+  const seenLetters = new Set<string>();
 
   return (
     <div>
@@ -136,30 +167,59 @@ export default function ConsultantsPage() {
               </div>
             </div>
 
-            {Object.entries(TYPE_LABELS).map(([type, label]) => (
-              <div key={type} className="mb-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {(grouped[type] || []).map((kw) => (
-                    <button
-                      key={kw.id}
-                      onClick={() => toggleKeyword(kw.id)}
-                      className={clsx(
-                        'rounded-full border px-2.5 py-1 text-xs',
-                        selected.has(kw.id)
-                          ? 'border-gold-500 bg-gold-500 text-brand-900'
-                          : 'border-slate-300 text-slate-600 hover:border-brand-600'
+            <input
+              value={keywordFilter}
+              onChange={(e) => setKeywordFilter(e.target.value)}
+              placeholder="Filter keywords…"
+              className="mb-4 w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs focus:border-brand-600 focus:outline-none"
+            />
+
+            {Object.entries(TYPE_LABELS).map(([type, label]) => {
+              const all = grouped[type] || [];
+              const visible = filterActive ? all.filter((kw) => matchesFilter(kw.label)) : all;
+              if (filterActive && visible.length === 0) return null;
+
+              const selectedCount = all.filter((kw) => selected.has(kw.id)).length;
+              const isOpen = filterActive || openCategories.has(type as KeywordType);
+
+              return (
+                <div key={type} className="mb-2 border-b border-slate-100 pb-2 last:border-0">
+                  <button
+                    onClick={() => toggleCategory(type as KeywordType)}
+                    className="flex w-full items-center justify-between py-1 text-left"
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {label}
+                      {selectedCount > 0 && (
+                        <span className="ml-1.5 rounded-full bg-gold-500 px-1.5 py-0.5 text-[10px] font-bold text-brand-900">
+                          {selectedCount}
+                        </span>
                       )}
-                    >
-                      {kw.label}
-                    </button>
-                  ))}
-                  {(grouped[type] || []).length === 0 && (
-                    <p className="text-xs text-slate-400">None yet</p>
+                    </span>
+                    <span className="text-xs text-slate-400">{isOpen ? '−' : '+'}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {visible.map((kw) => (
+                        <button
+                          key={kw.id}
+                          onClick={() => toggleKeyword(kw.id)}
+                          className={clsx(
+                            'rounded-full border px-2.5 py-1 text-xs',
+                            selected.has(kw.id)
+                              ? 'border-gold-500 bg-gold-500 text-brand-900'
+                              : 'border-slate-300 text-slate-600 hover:border-brand-600'
+                          )}
+                        >
+                          {kw.label}
+                        </button>
+                      ))}
+                      {visible.length === 0 && <p className="text-xs text-slate-400">None yet</p>}
+                    </div>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {selected.size > 0 && (
               <button onClick={() => setSelected(new Set())} className="text-xs text-brand-700 hover:underline">
@@ -170,7 +230,8 @@ export default function ConsultantsPage() {
         </aside>
 
         {/* Results */}
-        <section className="flex-1">
+        <section className="flex-1 lg:flex lg:gap-4">
+        <div className="flex-1">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row">
             <input
               value={query}
@@ -201,6 +262,15 @@ export default function ConsultantsPage() {
               <option value="LEASE_CONSTRUCTION">Lease Construction</option>
               <option value="ALL">All / Multiple</option>
             </select>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'name' | 'newest' | 'updated')}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="name">Name (A–Z)</option>
+              <option value="newest">Recently Added</option>
+              <option value="updated">Recently Updated</option>
+            </select>
             <button
               onClick={runSearch}
               className="rounded-lg bg-gold-500 px-4 py-2 text-sm font-bold text-brand-900 hover:bg-gold-600"
@@ -226,17 +296,34 @@ export default function ConsultantsPage() {
                   Select all {consultants.length} shown
                 </label>
                 {checkedIds.size > 0 && (
-                  <button
-                    onClick={() => setComposeOpen(true)}
-                    className="rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600"
-                  >
-                    Message Selected ({checkedIds.size})
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setInviteOpen(true)}
+                      className="rounded-lg bg-slate-100 px-4 py-1.5 text-sm font-bold text-slate-700 hover:bg-slate-200"
+                    >
+                      Send Invite Links ({checkedIds.size})
+                    </button>
+                    <button
+                      onClick={() => setComposeOpen(true)}
+                      className="rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600"
+                    >
+                      Message Selected ({checkedIds.size})
+                    </button>
+                  </div>
                 )}
               </div>
 
-              {consultants.map((c) => (
-                <div key={c.id} className="flex items-start gap-3">
+              {consultants.map((c) => {
+                const letter = c.lastName[0]?.toUpperCase();
+                const isFirstForLetter = letter && !seenLetters.has(letter);
+                if (isFirstForLetter) seenLetters.add(letter);
+
+                return (
+                <div
+                  key={c.id}
+                  id={isFirstForLetter ? `consultant-letter-${letter}` : undefined}
+                  className="flex items-start gap-3 scroll-mt-4"
+                >
                   <input
                     type="checkbox"
                     checked={checkedIds.has(c.id)}
@@ -301,9 +388,33 @@ export default function ConsultantsPage() {
                     )}
                   </Link>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
+        </div>
+
+        {sortBy === 'name' && consultants.length > 0 && (
+          <div className="mt-4 hidden shrink-0 lg:mt-0 lg:block">
+            <div className="sticky top-4 flex flex-col items-center gap-0.5 rounded-full border border-slate-200 bg-white px-1 py-2 shadow-sm">
+              {ALPHABET.map((letter) => (
+                <button
+                  key={letter}
+                  onClick={() => jumpToLetter(letter)}
+                  disabled={!lettersPresent.has(letter)}
+                  className={clsx(
+                    'flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold',
+                    lettersPresent.has(letter)
+                      ? 'text-brand-700 hover:bg-gold-500 hover:text-brand-900'
+                      : 'text-slate-300'
+                  )}
+                >
+                  {letter}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         </section>
       </main>
 
@@ -317,6 +428,126 @@ export default function ConsultantsPage() {
           }}
         />
       )}
+
+      {inviteOpen && (
+        <InviteModal
+          consultants={consultants.filter((c) => checkedIds.has(c.id))}
+          onClose={() => setInviteOpen(false)}
+          onSent={() => {
+            setInviteOpen(false);
+            setCheckedIds(new Set());
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function InviteModal({
+  consultants,
+  onClose,
+  onSent,
+}: {
+  consultants: Consultant[];
+  onClose: () => void;
+  onSent: () => void;
+}) {
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [results, setResults] = useState<{ name: string; status: string; message: string }[] | null>(null);
+
+  const alreadyHaveLogin = consultants.filter((c) => c.userId);
+  const noEmail = consultants.filter((c) => !c.userId && !c.email);
+  const eligible = consultants.filter((c) => !c.userId && c.email);
+
+  async function handleSend() {
+    setSending(true);
+    setError('');
+
+    const res = await fetch('/api/admin/consultants/bulk-invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ consultantIds: consultants.map((c) => c.id) }),
+    });
+    const data = await res.json();
+    setSending(false);
+
+    if (!res.ok) {
+      setError(data.error || 'Something went wrong');
+      return;
+    }
+    setResults(data.results);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        {results ? (
+          <div>
+            <h2 className="mb-2 text-lg font-semibold text-green-700">Sent!</h2>
+            <p className="mb-3 text-sm text-slate-600">
+              Sent {results.filter((r) => r.status === 'sent').length} invite link(s).
+            </p>
+            <ul className="max-h-64 space-y-1 overflow-y-auto text-xs">
+              {results.map((r, i) => (
+                <li
+                  key={i}
+                  className={
+                    r.status === 'error' ? 'text-red-700' : r.status === 'skipped' ? 'text-slate-400' : 'text-slate-600'
+                  }
+                >
+                  <span className="font-medium">{r.name}</span>: {r.message}
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={onSent}
+              className="mt-4 w-full rounded-lg bg-gold-500 py-2 text-sm font-bold text-brand-900 hover:bg-gold-600"
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <div>
+            <h2 className="mb-1 text-lg font-semibold text-brand-900">Send Invite Links</h2>
+            <p className="mb-4 text-sm text-slate-500">
+              Sends each consultant an email with their own link to set a password and access
+              their profile — the same link "Copy invite link" gives you on a profile page, just
+              for everyone selected at once.
+            </p>
+            <ul className="mb-4 space-y-1 text-sm text-slate-600">
+              <li>
+                <span className="font-medium text-slate-800">{eligible.length}</span> will get an
+                invite email
+              </li>
+              {alreadyHaveLogin.length > 0 && (
+                <li className="text-slate-400">
+                  {alreadyHaveLogin.length} skipped — already has a login
+                </li>
+              )}
+              {noEmail.length > 0 && (
+                <li className="text-amber-600">{noEmail.length} skipped — no email on file</li>
+              )}
+            </ul>
+            {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={handleSend}
+                disabled={sending || eligible.length === 0}
+                className="flex-1 rounded-lg bg-gold-500 py-2 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
+              >
+                {sending ? 'Sending…' : `Send to ${eligible.length}`}
+              </button>
+              <button
+                onClick={onClose}
+                className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

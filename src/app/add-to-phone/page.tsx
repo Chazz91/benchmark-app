@@ -19,14 +19,14 @@ export default function AddToPhonePage() {
           get back to work, no browser tabs needed.
         </p>
 
-        <div className="grid gap-8 sm:grid-cols-2">
-          {/* iPhone */}
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          {/* iPhone - Safari */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="mb-4 font-heading text-xl font-bold text-brand-900">iPhone (Safari)</h2>
             <ol className="space-y-4 text-sm text-slate-700">
               <li className="flex gap-3">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold-500 text-xs font-bold text-brand-900">1</span>
-                <span>Open this site in <strong>Safari</strong> (this only works in Safari, not Chrome, on iPhone).</span>
+                <span>Open this site in <strong>Safari</strong>.</span>
               </li>
               <li className="flex gap-3">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold-500 text-xs font-bold text-brand-900">2</span>
@@ -51,6 +51,39 @@ export default function AddToPhonePage() {
             <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
               Done! You&apos;ll see the Benchmark icon on your home screen, right alongside your
               other apps.
+            </p>
+          </div>
+
+          {/* iPhone - Chrome */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-4 font-heading text-xl font-bold text-brand-900">iPhone (Chrome)</h2>
+            <ol className="space-y-4 text-sm text-slate-700">
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold-500 text-xs font-bold text-brand-900">1</span>
+                <span>Open this site in <strong>Chrome</strong>.</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold-500 text-xs font-bold text-brand-900">2</span>
+                <span>
+                  Tap the <strong>Share button</strong> in the address bar at the top of the screen.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold-500 text-xs font-bold text-brand-900">3</span>
+                <span>
+                  Scroll down the menu that pops up and tap <strong>&quot;Add to Home Screen&quot;</strong>.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold-500 text-xs font-bold text-brand-900">4</span>
+                <span>
+                  Tap <strong>&quot;Add&quot;</strong> in the top corner.
+                </span>
+              </li>
+            </ol>
+            <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
+              Done! Works the same as Safari on newer iPhones &mdash; you&apos;ll get a real app
+              icon, no browser bar.
             </p>
           </div>
 

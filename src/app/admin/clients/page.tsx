@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import NavBar from '@/components/NavBar';
 import PageHeader from '@/components/PageHeader';
 
@@ -111,12 +112,20 @@ export default function ClientsPage() {
                     {client.requiredTicketTypes.length} ticket type(s) required
                   </p>
                 </div>
-                <button
-                  onClick={() => setExpandedId(expandedId === client.id ? null : client.id)}
-                  className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200"
-                >
-                  {expandedId === client.id ? 'Close' : 'Manage requirements'}
-                </button>
+                <div className="flex gap-2">
+                  <Link
+                    href={`/admin/clients/${client.id}`}
+                    className="rounded-lg bg-gold-500 px-3 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600"
+                  >
+                    View consultant matches
+                  </Link>
+                  <button
+                    onClick={() => setExpandedId(expandedId === client.id ? null : client.id)}
+                    className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200"
+                  >
+                    {expandedId === client.id ? 'Close' : 'Manage requirements'}
+                  </button>
+                </div>
               </div>
 
               {expandedId === client.id && (

@@ -17,6 +17,6 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     return NextResponse.json({ error: 'No attachment on this message' }, { status: 404 });
   }
 
-  const signedUrl = await getResumeSignedUrl(message.attachmentUrl);
+  const signedUrl = await getResumeSignedUrl(message.attachmentUrl, message.attachmentFileName || undefined);
   return NextResponse.redirect(signedUrl);
 }
