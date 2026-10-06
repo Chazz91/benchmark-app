@@ -57,27 +57,28 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
     // Two resume rows from one generation: the PDF is the "view" copy (opens inline
     // everywhere, including mobile), the .docx is the same content for downloading and
-    // editing directly in Word/Google Docs on a laptop.
-    const [resume] = await prisma.$transaction([
-      prisma.resume.create({
-        data: {
-          consultantId: consultant.id,
-          fileName: `${baseName}.pdf`,
-          fileUrl: pdfUrl,
-          isFormatted: true,
-          parsedAt: new Date(),
-        },
-      }),
-      prisma.resume.create({
-        data: {
-          consultantId: consultant.id,
-          fileName: `${baseName}.docx`,
-          fileUrl: docxUrl,
-          isFormatted: true,
-          parsedAt: new Date(),
-        },
-      }),
-    ]);
+    // editing directly in Word/Google Docs on a laptop. Plain sequential creates rather than
+    // $transaction - an interactive transaction needs its own dedicated connection to Neon
+    // (unlike the plain queries this app otherwise routes over HTTP, see src/lib/prisma.ts),
+    // and that connection attempt can time out on a cold serverless invocation.
+    const resume = await prisma.resume.create({
+      data: {
+        consultantId: consultant.id,
+        fileName: `${baseName}.pdf`,
+        fileUrl: pdfUrl,
+        isFormatted: true,
+        parsedAt: new Date(),
+      },
+    });
+    await prisma.resume.create({
+      data: {
+        consultantId: consultant.id,
+        fileName: `${baseName}.docx`,
+        fileUrl: docxUrl,
+        isFormatted: true,
+        parsedAt: new Date(),
+      },
+    });
 
     return NextResponse.json({ resume });
   } catch (err) {

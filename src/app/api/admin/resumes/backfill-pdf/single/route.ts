@@ -64,23 +64,24 @@ export async function POST(request: Request) {
       ),
     ]);
 
-    // The stale resume row becomes the PDF (the "view" copy); a new row holds the
-    // companion .docx for downloading and editing on a laptop.
-    await prisma.$transaction([
-      prisma.resume.update({
-        where: { id: resume.id },
-        data: { fileName: `${baseName}.pdf`, fileUrl: pdfUrl, parsedAt: new Date() },
-      }),
-      prisma.resume.create({
-        data: {
-          consultantId: consultant.id,
-          fileName: `${baseName}.docx`,
-          fileUrl: docxUrl,
-          isFormatted: true,
-          parsedAt: new Date(),
-        },
-      }),
-    ]);
+    // The stale resume row becomes the PDF (the "view" copy); a new row holds the companion
+    // .docx for downloading and editing on a laptop. Plain sequential calls rather than
+    // $transaction - an interactive transaction needs its own dedicated connection to Neon
+    // (unlike the plain queries this app otherwise routes over HTTP, see src/lib/prisma.ts),
+    // and that connection attempt can time out on a cold serverless invocation.
+    await prisma.resume.update({
+      where: { id: resume.id },
+      data: { fileName: `${baseName}.pdf`, fileUrl: pdfUrl, parsedAt: new Date() },
+    });
+    await prisma.resume.create({
+      data: {
+        consultantId: consultant.id,
+        fileName: `${baseName}.docx`,
+        fileUrl: docxUrl,
+        isFormatted: true,
+        parsedAt: new Date(),
+      },
+    });
 
     await prisma.activityLog.create({
       data: {
