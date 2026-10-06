@@ -1,20 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import {
-  Document,
-  Paragraph,
-  TextRun,
-  AlignmentType,
-  UnderlineType,
-  ImageRun,
-  Packer,
-  Table,
-  TableRow,
-  TableCell,
-  WidthType,
-  BorderStyle,
-  VerticalAlign,
-  Footer,
-} from 'docx';
+import PDFDocument from 'pdfkit';
 import { BENCHMARK_LOGO_BASE64 } from '@/lib/benchmarkLogo';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -96,245 +81,118 @@ async function reformatResumeContent(rawText: string): Promise<StructuredResume>
   return parsed;
 }
 
-const NAVY = '1F4E79';
-const ACCENT_BLUE = '4472C4';
-const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
-const BORDERLESS_CELL_BORDERS = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER };
+const NAVY = '#1F4E79';
+const ACCENT_BLUE = '#4472C4';
+const PAGE_MARGIN = { top: 60, bottom: 100, left: 60, right: 60 };
 
-function sectionHeading(text: string): Paragraph {
-  return new Paragraph({
-    spacing: { before: 300, after: 120 },
-    children: [new TextRun({ text, bold: true, underline: { type: UnderlineType.SINGLE } })],
-  });
+function sectionHeading(doc: PDFKit.PDFDocument, text: string) {
+  doc.moveDown(0.6);
+  doc.font('Helvetica-Bold').fontSize(11).fillColor('black').text(text, { underline: true });
+  doc.moveDown(0.2);
 }
 
-// Header row: logo (left) | consultant name (center, large navy) | title (right, blue)
-function buildHeaderTable(consultantName: string, consultantTitle: string): Table {
-  return new Table({
-    width: { size: 9360, type: WidthType.DXA },
-    columnWidths: [2400, 4560, 2400],
-    borders: {
-      top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER,
-      insideHorizontal: NO_BORDER, insideVertical: NO_BORDER,
-    },
-    rows: [
-      new TableRow({
-        children: [
-          new TableCell({
-            width: { size: 2400, type: WidthType.DXA },
-            borders: BORDERLESS_CELL_BORDERS,
-            verticalAlign: VerticalAlign.CENTER,
-            children: [
-              new Paragraph({
-                children: [
-                  new ImageRun({
-                    data: Buffer.from(BENCHMARK_LOGO_BASE64, 'base64'),
-                    transformation: { width: 185, height: 49 },
-                    type: 'jpg',
-                  }),
-                ],
-              }),
-            ],
-          }),
-          new TableCell({
-            width: { size: 4560, type: WidthType.DXA },
-            borders: BORDERLESS_CELL_BORDERS,
-            verticalAlign: VerticalAlign.CENTER,
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [
-                  new TextRun({ text: consultantName, bold: true, size: 32, color: NAVY }),
-                ],
-              }),
-            ],
-          }),
-          new TableCell({
-            width: { size: 2400, type: WidthType.DXA },
-            borders: BORDERLESS_CELL_BORDERS,
-            verticalAlign: VerticalAlign.CENTER,
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.RIGHT,
-                children: [new TextRun({ text: consultantTitle, color: ACCENT_BLUE, size: 20 })],
-              }),
-            ],
-          }),
-        ],
-      }),
-    ],
-  });
+// Draws the contact footer on whichever page is currently active. Writing below the normal
+// margin is what pdfkit uses to decide a page is full and insert a new one, so the bottom
+// margin is dropped to zero for the duration of this call and restored right after.
+function addFooter(doc: PDFKit.PDFDocument) {
+  const left = doc.page.margins.left;
+  const right = doc.page.width - doc.page.margins.right;
+  const footerTop = doc.page.height - PAGE_MARGIN.bottom + 20;
+
+  const originalBottomMargin = doc.page.margins.bottom;
+  doc.page.margins.bottom = 0;
+
+  doc.moveTo(left, footerTop).lineTo(right, footerTop).lineWidth(1).strokeColor('black').stroke();
+  doc.x = left;
+  doc.y = footerTop + 6;
+  doc.font('Helvetica').fontSize(8).fillColor('black');
+  doc.text('Benchmark Engineering Inc', { width: right - left, align: 'center' });
+  doc.text('Suite 810, 396 - 11th Ave S.W. Calgary, AB T2R 0C5', { width: right - left, align: 'center' });
+  doc.text('Phone (403) 266-5757  Fax (403) 266-5730', { width: right - left, align: 'center' });
+  doc.text('Contact: Nels Eckland (403) 605-2684', { width: right - left, align: 'center' });
+
+  doc.page.margins.bottom = originalBottomMargin;
 }
 
-// Thick black divider bar, matching the template's bold horizontal rule under the header
-function buildDividerBar(): Paragraph {
-  return new Paragraph({
-    spacing: { before: 100, after: 200 },
-    border: { bottom: { style: BorderStyle.SINGLE, size: 24, color: '000000' } },
-    children: [],
-  });
-}
-
-// Two-column job entry: narrow left column for the date range, wide right column for
-// company/title/bullets - matching the template's layout exactly.
-function buildJobTable(job: JobEntry): Table {
-  const rightCellChildren: Paragraph[] = [
-    new Paragraph({ children: [new TextRun({ text: job.company, bold: true })] }),
-    new Paragraph({
-      spacing: { after: 60 },
-      children: [new TextRun({ text: job.title, italics: true })],
-    }),
-    ...job.bullets.map(
-      (bullet) =>
-        new Paragraph({
-          bullet: { level: 0 },
-          spacing: { after: 40 },
-          children: [new TextRun({ text: bullet })],
-        })
-    ),
-  ];
-
-  return new Table({
-    width: { size: 9360, type: WidthType.DXA },
-    columnWidths: [1800, 7560],
-    borders: {
-      top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER,
-      insideHorizontal: NO_BORDER, insideVertical: NO_BORDER,
-    },
-    rows: [
-      new TableRow({
-        children: [
-          new TableCell({
-            width: { size: 1800, type: WidthType.DXA },
-            borders: BORDERLESS_CELL_BORDERS,
-            children: [new Paragraph({ children: [new TextRun({ text: job.dateRange, bold: true })] })],
-          }),
-          new TableCell({
-            width: { size: 7560, type: WidthType.DXA },
-            borders: BORDERLESS_CELL_BORDERS,
-            children: rightCellChildren,
-          }),
-        ],
-      }),
-    ],
-  });
-}
-
-// Two-column "REFERENCES  |  Available upon request" row, matching the template
-function buildReferencesTable(): Table {
-  return new Table({
-    width: { size: 9360, type: WidthType.DXA },
-    columnWidths: [1800, 7560],
-    borders: {
-      top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER,
-      insideHorizontal: NO_BORDER, insideVertical: NO_BORDER,
-    },
-    rows: [
-      new TableRow({
-        children: [
-          new TableCell({
-            width: { size: 1800, type: WidthType.DXA },
-            borders: BORDERLESS_CELL_BORDERS,
-            children: [
-              new Paragraph({
-                children: [new TextRun({ text: 'REFERENCES', bold: true, underline: { type: UnderlineType.SINGLE } })],
-              }),
-            ],
-          }),
-          new TableCell({
-            width: { size: 7560, type: WidthType.DXA },
-            borders: BORDERLESS_CELL_BORDERS,
-            children: [new Paragraph({ children: [new TextRun({ text: 'Available upon request', italics: true })] })],
-          }),
-        ],
-      }),
-    ],
-  });
-}
-
-function buildFooter(): Footer {
-  return new Footer({
-    children: [
-      new Paragraph({
-        border: { top: { style: BorderStyle.SINGLE, size: 4, color: '000000' } },
-        spacing: { before: 100 },
-        alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: 'Benchmark Engineering Inc', size: 16 })],
-      }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: 'Suite 810, 396 - 11th Ave S.W. Calgary, AB T2R 0C5', size: 16 })],
-      }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: 'Phone (403) 266-5757  Fax (403) 266-5730', size: 16 })],
-      }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: 'Contact: Nels Eckland (403) 605-2684', size: 16 })],
-      }),
-    ],
-  });
-}
-
-// Pure document builder - no API calls - so it can be tested directly with fixture data
-export function buildResumeDocument(
+// Builds the polished, Benchmark-branded resume as a PDF rather than a Word document.
+// Mobile browsers have no built-in viewer for .docx (see src/lib/fileDisplay.ts /
+// src/lib/storage.ts's INLINE_EXTENSIONS) and force it through a download-then-open-in-
+// another-app flow. PDFs render inline everywhere - phone, tablet, desktop - with no third
+// party viewer involved, so generating one directly is what makes "tap the link, see the
+// resume" actually work on mobile for this document the way it already does for uploads.
+export function buildResumePdf(
   structured: StructuredResume,
   ticketLabels: string[],
   consultantName: string,
   consultantTitle: string
-): Document {
-  const summaryHeading = sectionHeading('SUMMARY OF EXPERIENCE');
-  const summaryParagraph = new Paragraph({
-    spacing: { after: 200 },
-    alignment: AlignmentType.JUSTIFIED,
-    children: [new TextRun({ text: structured.summary })],
-  });
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'LETTER', margins: PAGE_MARGIN, bufferPages: true });
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
 
-  const experienceHeading = sectionHeading('EXPERIENCE');
-  const jobBlocks: (Table | Paragraph)[] = [];
-  structured.jobs.forEach((job) => {
-    jobBlocks.push(buildJobTable(job));
-    jobBlocks.push(new Paragraph({ spacing: { after: 120 }, children: [] }));
-  });
+    const left = doc.page.margins.left;
+    const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const headerTop = doc.y;
 
-  const ticketsHeading = sectionHeading('EDUCATION/TICKETS');
-  const ticketParagraphs =
-    ticketLabels.length > 0
-      ? ticketLabels.map(
-          (label) =>
-            new Paragraph({
-              bullet: { level: 0 },
-              spacing: { after: 60 },
-              children: [new TextRun({ text: label })],
-            })
-        )
-      : [new Paragraph({ children: [new TextRun({ text: 'None on file yet', italics: true })] })];
+    doc.image(Buffer.from(BENCHMARK_LOGO_BASE64, 'base64'), left, headerTop, { width: 110 });
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(18)
+      .fillColor(NAVY)
+      .text(consultantName, left, headerTop + 10, { width: contentWidth, align: 'center' });
+    doc
+      .font('Helvetica')
+      .fontSize(11)
+      .fillColor(ACCENT_BLUE)
+      .text(consultantTitle || '', left, headerTop + 10, { width: contentWidth, align: 'right' });
 
-  return new Document({
-    sections: [
-      {
-        properties: {
-          page: {
-            size: { width: 12240, height: 15840 }, // US Letter
-            margin: { top: 720, bottom: 900, left: 1080, right: 1080 },
-          },
-        },
-        footers: { default: buildFooter() },
-        children: [
-          buildHeaderTable(consultantName, consultantTitle),
-          buildDividerBar(),
-          summaryHeading,
-          summaryParagraph,
-          experienceHeading,
-          ...jobBlocks,
-          ticketsHeading,
-          ...ticketParagraphs,
-          new Paragraph({ spacing: { before: 200 }, children: [] }),
-          buildReferencesTable(),
-        ],
-      },
-    ],
+    const dividerY = headerTop + 55;
+    doc
+      .moveTo(left, dividerY)
+      .lineTo(doc.page.width - doc.page.margins.right, dividerY)
+      .lineWidth(3)
+      .strokeColor('black')
+      .stroke();
+    doc.x = left;
+    doc.y = dividerY + 14;
+    doc.fillColor('black');
+
+    sectionHeading(doc, 'SUMMARY OF EXPERIENCE');
+    doc.font('Helvetica').fontSize(10).fillColor('black').text(structured.summary, { align: 'justify' });
+
+    sectionHeading(doc, 'EXPERIENCE');
+    structured.jobs.forEach((job) => {
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(NAVY).text(job.dateRange);
+      doc.font('Helvetica-Bold').fontSize(10.5).fillColor('black').text(job.company);
+      doc.font('Helvetica-Oblique').fontSize(10).fillColor('black').text(job.title);
+      doc.moveDown(0.2);
+      if (job.bullets.length > 0) {
+        doc.font('Helvetica').fontSize(10).list(job.bullets, { bulletRadius: 1.5, textIndent: 14 });
+      }
+      doc.moveDown(0.5);
+    });
+
+    sectionHeading(doc, 'EDUCATION/TICKETS');
+    if (ticketLabels.length > 0) {
+      doc.font('Helvetica').fontSize(10).list(ticketLabels, { bulletRadius: 1.5, textIndent: 14 });
+    } else {
+      doc.font('Helvetica-Oblique').fontSize(10).fillColor('black').text('None on file yet');
+    }
+
+    doc.moveDown(0.6);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('REFERENCES', { continued: true, underline: true });
+    doc.font('Helvetica-Oblique').text('   Available upon request');
+
+    const pageRange = doc.bufferedPageRange();
+    for (let i = pageRange.start; i < pageRange.start + pageRange.count; i++) {
+      doc.switchToPage(i);
+      addFooter(doc);
+    }
+
+    doc.end();
   });
 }
 
@@ -345,6 +203,5 @@ export async function generatePolishedResume(
   consultantTitle: string
 ): Promise<Buffer> {
   const structured = await reformatResumeContent(rawResumeText);
-  const doc = buildResumeDocument(structured, ticketLabels, consultantName, consultantTitle);
-  return Packer.toBuffer(doc);
+  return buildResumePdf(structured, ticketLabels, consultantName, consultantTitle);
 }
