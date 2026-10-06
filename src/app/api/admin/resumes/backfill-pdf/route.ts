@@ -11,8 +11,15 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // A Benchmark-format .docx only needs backfilling if its consultant has no Benchmark-format
+  // .pdf at all - every generation now produces a PDF+docx pair together (the docx purely for
+  // downloading and editing in Word), so a consultant who already has a pdf is done, not stale.
   const staleResumes = await prisma.resume.findMany({
-    where: { isFormatted: true, fileName: { endsWith: '.docx' } },
+    where: {
+      isFormatted: true,
+      fileName: { endsWith: '.docx' },
+      consultant: { resumes: { none: { isFormatted: true, fileName: { endsWith: '.pdf' } } } },
+    },
     include: { consultant: { select: { firstName: true, lastName: true } } },
   });
 

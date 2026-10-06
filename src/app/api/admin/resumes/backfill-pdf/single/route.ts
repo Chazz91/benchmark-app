@@ -55,7 +55,7 @@ export async function POST(request: Request) {
 
     const baseName = `${name} - Benchmark Resume`;
     const timestamp = Date.now();
-    const [fileUrl, editableFileUrl] = await Promise.all([
+    const [pdfUrl, docxUrl] = await Promise.all([
       uploadResumeFile(`resumes/${consultant.id}/${timestamp}-benchmark-format.pdf`, pdfBuffer, 'application/pdf'),
       uploadResumeFile(
         `resumes/${consultant.id}/${timestamp}-benchmark-format.docx`,
@@ -64,16 +64,23 @@ export async function POST(request: Request) {
       ),
     ]);
 
-    await prisma.resume.update({
-      where: { id: resume.id },
-      data: {
-        fileName: `${baseName}.pdf`,
-        fileUrl,
-        editableFileName: `${baseName}.docx`,
-        editableFileUrl,
-        parsedAt: new Date(),
-      },
-    });
+    // The stale resume row becomes the PDF (the "view" copy); a new row holds the
+    // companion .docx for downloading and editing on a laptop.
+    await prisma.$transaction([
+      prisma.resume.update({
+        where: { id: resume.id },
+        data: { fileName: `${baseName}.pdf`, fileUrl: pdfUrl, parsedAt: new Date() },
+      }),
+      prisma.resume.create({
+        data: {
+          consultantId: consultant.id,
+          fileName: `${baseName}.docx`,
+          fileUrl: docxUrl,
+          isFormatted: true,
+          parsedAt: new Date(),
+        },
+      }),
+    ]);
 
     await prisma.activityLog.create({
       data: {

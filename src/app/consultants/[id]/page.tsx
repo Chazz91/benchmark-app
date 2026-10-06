@@ -30,13 +30,7 @@ interface ConsultantDetail {
   serviceOrderSheetStartDate: string | null;
   serviceOrderSheetEndDate: string | null;
   keywords: { keyword: { id: string; label: string; type: string }; source: string; confidence: number | null }[];
-  resumes: {
-    id: string;
-    fileName: string;
-    createdAt: string;
-    isFormatted: boolean;
-    editableFileName: string | null;
-  }[];
+  resumes: { id: string; fileName: string; createdAt: string; isFormatted: boolean }[];
   tickets: {
     id: string;
     issueDate: string;
@@ -1108,11 +1102,6 @@ export default function ConsultantDetailPage() {
                     <span className="ml-1 rounded-full bg-gold-500/20 px-2 py-0.5 text-xs font-medium text-brand-900">
                       Benchmark Format
                     </span>
-                  )}{' '}
-                  {r.editableFileName && (
-                    <a href={`/api/resumes/${r.id}/edit-file`} className="ml-1 text-xs text-brand-700 hover:underline">
-                      Edit in Word
-                    </a>
                   )}{' '}
                   — {new Date(r.createdAt).toLocaleDateString()}
                 </span>
