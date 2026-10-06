@@ -43,13 +43,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       consultant.title || ''
     );
 
-    const fileName = `${consultant.firstName} ${consultant.lastName} - Benchmark Resume.docx`;
-    const key = `resumes/${consultant.id}/${Date.now()}-benchmark-format.docx`;
-    const fileUrl = await uploadResumeFile(
-      key,
-      buffer,
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    );
+    const fileName = `${consultant.firstName} ${consultant.lastName} - Benchmark Resume.pdf`;
+    const key = `resumes/${consultant.id}/${Date.now()}-benchmark-format.pdf`;
+    const fileUrl = await uploadResumeFile(key, buffer, 'application/pdf');
 
     const resume = await prisma.resume.create({
       data: {
