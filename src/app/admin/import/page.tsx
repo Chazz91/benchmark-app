@@ -534,6 +534,65 @@ function BackfillDisciplineSection() {
   );
 }
 
+function BackfillResumePdfSection() {
+  const [running, setRunning] = useState(false);
+  const [results, setResults] = useState<{ name: string; status: string; message: string }[] | null>(null);
+  const [summary, setSummary] = useState<{ checkedCount: number; updatedCount: number } | null>(null);
+
+  async function handleRun() {
+    setRunning(true);
+    setResults(null);
+    setSummary(null);
+
+    const res = await fetch('/api/admin/resumes/backfill-pdf', { method: 'POST' });
+    const data = await res.json();
+    setRunning(false);
+
+    if (!res.ok) {
+      alert(data.error || 'Failed to run backfill');
+      return;
+    }
+    setResults(data.results);
+    setSummary({ checkedCount: data.checkedCount, updatedCount: data.updatedCount });
+  }
+
+  return (
+    <div className="rounded-2xl border border-gold-400/50 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-brand-900">Backfill Benchmark Resumes to PDF</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        One-time cleanup for "Benchmark Format" resumes generated before the generator switched
+        from Word to PDF. Regenerates each one from the consultant&apos;s current tickets and
+        most recent original resume, so they open directly on mobile instead of forcing a
+        download.
+      </p>
+
+      <button
+        onClick={handleRun}
+        disabled={running}
+        className="mt-3 rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
+      >
+        {running ? 'Regenerating resumes…' : 'Run Backfill'}
+      </button>
+
+      {summary && (
+        <p className="mt-3 text-sm text-green-700">
+          Checked {summary.checkedCount} resume(s), updated {summary.updatedCount}.
+        </p>
+      )}
+
+      {results && results.length > 0 && (
+        <ul className="mt-3 max-h-64 space-y-1 overflow-y-auto text-sm">
+          {results.map((r, i) => (
+            <li key={i} className={r.status === 'error' ? 'text-red-700' : 'text-slate-700'}>
+              <span className="font-medium">{r.name}</span>: {r.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function ImportPage() {
   return (
     <div>
@@ -544,6 +603,7 @@ export default function ImportPage() {
           <FolderImportSection />
           <ResumeImportSection />
           <BackfillDisciplineSection />
+          <BackfillResumePdfSection />
 
           <div>
             <p className="mb-3 text-sm text-slate-500">
