@@ -536,24 +536,53 @@ function BackfillDisciplineSection() {
 
 function BackfillResumePdfSection() {
   const [running, setRunning] = useState(false);
+  const [progressNote, setProgressNote] = useState('');
   const [results, setResults] = useState<{ name: string; status: string; message: string }[] | null>(null);
   const [summary, setSummary] = useState<{ checkedCount: number; updatedCount: number } | null>(null);
 
   async function handleRun() {
     setRunning(true);
-    setResults(null);
+    setResults([]);
     setSummary(null);
 
-    const res = await fetch('/api/admin/resumes/backfill-pdf', { method: 'POST' });
-    const data = await res.json();
-    setRunning(false);
-
-    if (!res.ok) {
-      alert(data.error || 'Failed to run backfill');
+    const listRes = await fetch('/api/admin/resumes/backfill-pdf');
+    const listData = await listRes.json();
+    if (!listRes.ok) {
+      alert(listData.error || 'Failed to list resumes to backfill');
+      setRunning(false);
       return;
     }
-    setResults(data.results);
-    setSummary({ checkedCount: data.checkedCount, updatedCount: data.updatedCount });
+
+    const items: { id: string; name: string }[] = listData.items;
+    let updatedCount = 0;
+
+    // One resume, one request, one at a time - each regeneration needs its own Claude call,
+    // and bundling them all into a single request is what made this hang for minutes and
+    // risk timing out. Processing them individually keeps every step fast and reliable.
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      setProgressNote(`Regenerating resume ${i + 1} of ${items.length}: "${item.name}"…`);
+
+      try {
+        const res = await fetch('/api/admin/resumes/backfill-pdf/single', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resumeId: item.id }),
+        });
+        const data = await res.json();
+        if (data.status === 'updated') updatedCount++;
+        setResults((prev) => [...(prev || []), data]);
+      } catch (err) {
+        setResults((prev) => [
+          ...(prev || []),
+          { name: item.name, status: 'error', message: `Request failed: ${(err as Error).message}` },
+        ]);
+      }
+    }
+
+    setSummary({ checkedCount: items.length, updatedCount });
+    setProgressNote('');
+    setRunning(false);
   }
 
   return (
@@ -574,6 +603,8 @@ function BackfillResumePdfSection() {
         {running ? 'Regenerating resumes…' : 'Run Backfill'}
       </button>
 
+      {progressNote && <p className="mt-3 text-sm text-slate-500">{progressNote}</p>}
+
       {summary && (
         <p className="mt-3 text-sm text-green-700">
           Checked {summary.checkedCount} resume(s), updated {summary.updatedCount}.
@@ -589,6 +620,12 @@ function BackfillResumePdfSection() {
           ))}
         </ul>
       )}
+
+      <p className="mt-3 text-xs text-slate-400">
+        Since every resume is now processed one at a time, a large batch will take a bit
+        longer overall, but each individual step stays fast and reliable - watch the progress
+        line above to see exactly what it's working on.
+      </p>
     </div>
   );
 }
