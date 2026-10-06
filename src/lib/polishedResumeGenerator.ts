@@ -83,12 +83,25 @@ async function reformatResumeContent(rawText: string): Promise<StructuredResume>
 
 const NAVY = '#1F4E79';
 const ACCENT_BLUE = '#4472C4';
-const PAGE_MARGIN = { top: 60, bottom: 100, left: 60, right: 60 };
+// Matches the original Word template's page setup (0.5in top, 0.625in sides, 0.75in bottom)
+// converted from twips to points (1pt = 20 twips) - the bottom margin is enlarged beyond the
+// original 45pt because our footer is drawn manually into reserved space rather than relying
+// on Word's own footer area, which needs more clearance to fit four lines without crowding.
+const PAGE_MARGIN = { top: 36, bottom: 100, left: 54, right: 54 };
+const BODY_SIZE = 11; // the Word template never overrode its base font size
+// Column proportions from the original two/three-column tables (1800/7560 and
+// 2400/4560/2400 twips) - kept as ratios since our content width differs slightly from the
+// original's hardcoded table width.
+const DATE_COL_RATIO = 1800 / 9360;
+const LOGO_COL_RATIO = 2400 / 9360;
+const NAME_COL_RATIO = 4560 / 9360;
+const GUTTER = 10; // approximates Word's default table-cell padding between adjacent columns
 
 function sectionHeading(doc: PDFKit.PDFDocument, text: string) {
-  doc.moveDown(0.6);
-  doc.font('Helvetica-Bold').fontSize(11).fillColor('black').text(text, { underline: true });
-  doc.moveDown(0.2);
+  doc.x = doc.page.margins.left;
+  doc.y += 15; // spacing before: 300 twips
+  doc.font('Helvetica-Bold').fontSize(BODY_SIZE).fillColor('black').text(text, { underline: true });
+  doc.y += 6; // spacing after: 120 twips
 }
 
 // Draws the contact footer on whichever page is currently active. Writing below the normal
@@ -135,21 +148,34 @@ export function buildResumePdf(
 
     const left = doc.page.margins.left;
     const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+    // --- Header: logo | name (centered) | title (right-aligned), as three columns matching
+    // the original Word template's 2400:4560:2400 twip table ---
+    const logoColWidth = contentWidth * LOGO_COL_RATIO;
+    const nameColWidth = contentWidth * NAME_COL_RATIO;
+    const titleColWidth = contentWidth * LOGO_COL_RATIO;
     const headerTop = doc.y;
 
-    doc.image(Buffer.from(BENCHMARK_LOGO_BASE64, 'base64'), left, headerTop, { width: 110 });
+    doc.image(Buffer.from(BENCHMARK_LOGO_BASE64, 'base64'), left, headerTop, { width: 139 });
     doc
       .font('Helvetica-Bold')
-      .fontSize(18)
+      .fontSize(16)
       .fillColor(NAVY)
-      .text(consultantName, left, headerTop + 10, { width: contentWidth, align: 'center' });
+      .text(consultantName, left + logoColWidth + GUTTER, headerTop + 10, {
+        width: nameColWidth - GUTTER * 2,
+        align: 'center',
+      });
     doc
       .font('Helvetica')
-      .fontSize(11)
+      .fontSize(10)
       .fillColor(ACCENT_BLUE)
-      .text(consultantTitle || '', left, headerTop + 10, { width: contentWidth, align: 'right' });
+      .text(consultantTitle || '', left + logoColWidth + nameColWidth + GUTTER, headerTop + 10, {
+        width: titleColWidth - GUTTER,
+        align: 'right',
+      });
 
-    const dividerY = headerTop + 55;
+    // Thick divider bar under the header, matching the template's bold horizontal rule
+    const dividerY = headerTop + 50;
     doc
       .moveTo(left, dividerY)
       .lineTo(doc.page.width - doc.page.margins.right, dividerY)
@@ -161,30 +187,58 @@ export function buildResumePdf(
     doc.fillColor('black');
 
     sectionHeading(doc, 'SUMMARY OF EXPERIENCE');
-    doc.font('Helvetica').fontSize(10).fillColor('black').text(structured.summary, { align: 'justify' });
+    doc.font('Helvetica').fontSize(BODY_SIZE).fillColor('black').text(structured.summary, { align: 'justify' });
 
+    // --- Experience: two-column rows (narrow date column | company/title/bullets column),
+    // matching the original Word template's 1800:7560 twip job tables ---
     sectionHeading(doc, 'EXPERIENCE');
+    const dateColWidth = contentWidth * DATE_COL_RATIO;
+    const roleColX = left + dateColWidth + GUTTER;
+    const roleColWidth = contentWidth - dateColWidth - GUTTER;
+
     structured.jobs.forEach((job) => {
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(NAVY).text(job.dateRange);
-      doc.font('Helvetica-Bold').fontSize(10.5).fillColor('black').text(job.company);
-      doc.font('Helvetica-Oblique').fontSize(10).fillColor('black').text(job.title);
-      doc.moveDown(0.2);
+      if (doc.y > doc.page.height - doc.page.margins.bottom - 60) doc.addPage();
+      const rowTop = doc.y;
+
+      doc.font('Helvetica-Bold').fontSize(BODY_SIZE).fillColor('black').text(job.dateRange, left, rowTop, {
+        width: dateColWidth,
+      });
+
+      doc.x = roleColX;
+      doc.y = rowTop;
+      doc.font('Helvetica-Bold').fontSize(BODY_SIZE).fillColor('black').text(job.company, { width: roleColWidth });
+      doc.font('Helvetica-Oblique').fontSize(BODY_SIZE).fillColor('black').text(job.title, { width: roleColWidth });
+      doc.y += 3; // spacing after the title line: 60 twips
       if (job.bullets.length > 0) {
-        doc.font('Helvetica').fontSize(10).list(job.bullets, { bulletRadius: 1.5, textIndent: 14 });
+        doc.x = roleColX;
+        doc.font('Helvetica').fontSize(BODY_SIZE).list(job.bullets, { width: roleColWidth, bulletRadius: 1.5, textIndent: 14 });
       }
-      doc.moveDown(0.5);
+
+      doc.x = left;
+      doc.y += 8; // gap between job entries
     });
 
     sectionHeading(doc, 'EDUCATION/TICKETS');
     if (ticketLabels.length > 0) {
-      doc.font('Helvetica').fontSize(10).list(ticketLabels, { bulletRadius: 1.5, textIndent: 14 });
+      doc.font('Helvetica').fontSize(BODY_SIZE).list(ticketLabels, { bulletRadius: 1.5, textIndent: 14 });
     } else {
-      doc.font('Helvetica-Oblique').fontSize(10).fillColor('black').text('None on file yet');
+      doc.font('Helvetica-Oblique').fontSize(BODY_SIZE).fillColor('black').text('None on file yet');
     }
 
-    doc.moveDown(0.6);
-    doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('REFERENCES', { continued: true, underline: true });
-    doc.font('Helvetica-Oblique').text('   Available upon request');
+    // --- References: same two-column layout as the job rows ---
+    doc.x = left;
+    doc.y += 10;
+    const refRowTop = doc.y;
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(BODY_SIZE)
+      .fillColor('black')
+      .text('REFERENCES', left, refRowTop, { width: dateColWidth, underline: true });
+    doc
+      .font('Helvetica-Oblique')
+      .fontSize(BODY_SIZE)
+      .fillColor('black')
+      .text('Available upon request', roleColX, refRowTop, { width: roleColWidth });
 
     const pageRange = doc.bufferedPageRange();
     for (let i = pageRange.start; i < pageRange.start + pageRange.count; i++) {
