@@ -264,11 +264,6 @@ model Resume {
   parsedAt     DateTime?
   // true for the polished Benchmark-branded version generated from the original resume
   isFormatted  Boolean    @default(false)
-  // for a formatted resume only: a Word copy of the same content, generated alongside the
-  // PDF, so it can be downloaded and edited directly in Word/Google Docs. The PDF above
-  // stays the "view" copy since it's the one that opens inline on mobile.
-  editableFileUrl  String?
-  editableFileName String?
   createdAt    DateTime   @default(now())
 }
 

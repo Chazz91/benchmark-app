@@ -46,7 +46,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
     const baseName = `${name} - Benchmark Resume`;
     const timestamp = Date.now();
-    const [fileUrl, editableFileUrl] = await Promise.all([
+    const [pdfUrl, docxUrl] = await Promise.all([
       uploadResumeFile(`resumes/${consultant.id}/${timestamp}-benchmark-format.pdf`, pdfBuffer, 'application/pdf'),
       uploadResumeFile(
         `resumes/${consultant.id}/${timestamp}-benchmark-format.docx`,
@@ -55,17 +55,29 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       ),
     ]);
 
-    const resume = await prisma.resume.create({
-      data: {
-        consultantId: consultant.id,
-        fileName: `${baseName}.pdf`,
-        fileUrl,
-        editableFileName: `${baseName}.docx`,
-        editableFileUrl,
-        isFormatted: true,
-        parsedAt: new Date(),
-      },
-    });
+    // Two resume rows from one generation: the PDF is the "view" copy (opens inline
+    // everywhere, including mobile), the .docx is the same content for downloading and
+    // editing directly in Word/Google Docs on a laptop.
+    const [resume] = await prisma.$transaction([
+      prisma.resume.create({
+        data: {
+          consultantId: consultant.id,
+          fileName: `${baseName}.pdf`,
+          fileUrl: pdfUrl,
+          isFormatted: true,
+          parsedAt: new Date(),
+        },
+      }),
+      prisma.resume.create({
+        data: {
+          consultantId: consultant.id,
+          fileName: `${baseName}.docx`,
+          fileUrl: docxUrl,
+          isFormatted: true,
+          parsedAt: new Date(),
+        },
+      }),
+    ]);
 
     return NextResponse.json({ resume });
   } catch (err) {
