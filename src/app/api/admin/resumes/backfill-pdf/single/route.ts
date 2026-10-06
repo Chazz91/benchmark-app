@@ -46,15 +46,33 @@ export async function POST(request: Request) {
 
   try {
     const ticketLabels = consultant.tickets.map((t) => t.ticketType.label);
-    const buffer = await generatePolishedResume(sourceResume.rawText, ticketLabels, name, consultant.title || '');
+    const { pdfBuffer, docxBuffer } = await generatePolishedResume(
+      sourceResume.rawText,
+      ticketLabels,
+      name,
+      consultant.title || ''
+    );
 
-    const fileName = `${name} - Benchmark Resume.pdf`;
-    const key = `resumes/${consultant.id}/${Date.now()}-benchmark-format.pdf`;
-    const fileUrl = await uploadResumeFile(key, buffer, 'application/pdf');
+    const baseName = `${name} - Benchmark Resume`;
+    const timestamp = Date.now();
+    const [fileUrl, editableFileUrl] = await Promise.all([
+      uploadResumeFile(`resumes/${consultant.id}/${timestamp}-benchmark-format.pdf`, pdfBuffer, 'application/pdf'),
+      uploadResumeFile(
+        `resumes/${consultant.id}/${timestamp}-benchmark-format.docx`,
+        docxBuffer,
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ),
+    ]);
 
     await prisma.resume.update({
       where: { id: resume.id },
-      data: { fileName, fileUrl, parsedAt: new Date() },
+      data: {
+        fileName: `${baseName}.pdf`,
+        fileUrl,
+        editableFileName: `${baseName}.docx`,
+        editableFileUrl,
+        parsedAt: new Date(),
+      },
     });
 
     await prisma.activityLog.create({

@@ -1,5 +1,21 @@
 import Anthropic from '@anthropic-ai/sdk';
 import PDFDocument from 'pdfkit';
+import {
+  Document,
+  Paragraph,
+  TextRun,
+  AlignmentType,
+  UnderlineType,
+  ImageRun,
+  Packer,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  BorderStyle,
+  VerticalAlign,
+  Footer,
+} from 'docx';
 import { BENCHMARK_LOGO_BASE64 } from '@/lib/benchmarkLogo';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -81,8 +97,8 @@ async function reformatResumeContent(rawText: string): Promise<StructuredResume>
   return parsed;
 }
 
-const NAVY = '#1F4E79';
-const ACCENT_BLUE = '#4472C4';
+const PDF_NAVY = '#1F4E79';
+const PDF_ACCENT_BLUE = '#4472C4';
 // Matches the original Word template's page setup (0.5in top, 0.625in sides, 0.75in bottom)
 // converted from twips to points (1pt = 20 twips) - the bottom margin is enlarged beyond the
 // original 45pt because our footer is drawn manually into reserved space rather than relying
@@ -97,7 +113,7 @@ const LOGO_COL_RATIO = 2400 / 9360;
 const NAME_COL_RATIO = 4560 / 9360;
 const GUTTER = 10; // approximates Word's default table-cell padding between adjacent columns
 
-function sectionHeading(doc: PDFKit.PDFDocument, text: string) {
+function addPdfSectionHeading(doc: PDFKit.PDFDocument, text: string) {
   doc.x = doc.page.margins.left;
   doc.y += 15; // spacing before: 300 twips
   doc.font('Helvetica-Bold').fontSize(BODY_SIZE).fillColor('black').text(text, { underline: true });
@@ -160,7 +176,7 @@ export function buildResumePdf(
     doc
       .font('Helvetica-Bold')
       .fontSize(16)
-      .fillColor(NAVY)
+      .fillColor(PDF_NAVY)
       .text(consultantName, left + logoColWidth + GUTTER, headerTop + 10, {
         width: nameColWidth - GUTTER * 2,
         align: 'center',
@@ -168,7 +184,7 @@ export function buildResumePdf(
     doc
       .font('Helvetica')
       .fontSize(10)
-      .fillColor(ACCENT_BLUE)
+      .fillColor(PDF_ACCENT_BLUE)
       .text(consultantTitle || '', left + logoColWidth + nameColWidth + GUTTER, headerTop + 10, {
         width: titleColWidth - GUTTER,
         align: 'right',
@@ -186,12 +202,12 @@ export function buildResumePdf(
     doc.y = dividerY + 14;
     doc.fillColor('black');
 
-    sectionHeading(doc, 'SUMMARY OF EXPERIENCE');
+    addPdfSectionHeading(doc, 'SUMMARY OF EXPERIENCE');
     doc.font('Helvetica').fontSize(BODY_SIZE).fillColor('black').text(structured.summary, { align: 'justify' });
 
     // --- Experience: two-column rows (narrow date column | company/title/bullets column),
     // matching the original Word template's 1800:7560 twip job tables ---
-    sectionHeading(doc, 'EXPERIENCE');
+    addPdfSectionHeading(doc, 'EXPERIENCE');
     const dateColWidth = contentWidth * DATE_COL_RATIO;
     const roleColX = left + dateColWidth + GUTTER;
     const roleColWidth = contentWidth - dateColWidth - GUTTER;
@@ -218,7 +234,7 @@ export function buildResumePdf(
       doc.y += 8; // gap between job entries
     });
 
-    sectionHeading(doc, 'EDUCATION/TICKETS');
+    addPdfSectionHeading(doc, 'EDUCATION/TICKETS');
     if (ticketLabels.length > 0) {
       doc.font('Helvetica').fontSize(BODY_SIZE).list(ticketLabels, { bulletRadius: 1.5, textIndent: 14 });
     } else {
@@ -250,12 +266,274 @@ export function buildResumePdf(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Word (editable) generation - the same content as the PDF above, as a .docx a consultant's
+// coordinator can download and edit directly in Word/Google Docs (wording tweaks, formatting
+// touch-ups) without needing an in-app editor. The PDF stays the "view" copy since it's the
+// one that opens inline on mobile; this is purely for local editing on a laptop.
+// ---------------------------------------------------------------------------
+
+const DOCX_NAVY = '1F4E79';
+const DOCX_ACCENT_BLUE = '4472C4';
+const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+const BORDERLESS_CELL_BORDERS = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER };
+
+function sectionHeading(text: string): Paragraph {
+  return new Paragraph({
+    spacing: { before: 300, after: 120 },
+    children: [new TextRun({ text, bold: true, underline: { type: UnderlineType.SINGLE } })],
+  });
+}
+
+// Header row: logo (left) | consultant name (center, large navy) | title (right, blue)
+function buildHeaderTable(consultantName: string, consultantTitle: string): Table {
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [2400, 4560, 2400],
+    borders: {
+      top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER,
+      insideHorizontal: NO_BORDER, insideVertical: NO_BORDER,
+    },
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 2400, type: WidthType.DXA },
+            borders: BORDERLESS_CELL_BORDERS,
+            verticalAlign: VerticalAlign.CENTER,
+            children: [
+              new Paragraph({
+                children: [
+                  new ImageRun({
+                    data: Buffer.from(BENCHMARK_LOGO_BASE64, 'base64'),
+                    transformation: { width: 185, height: 49 },
+                    type: 'jpg',
+                  }),
+                ],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 4560, type: WidthType.DXA },
+            borders: BORDERLESS_CELL_BORDERS,
+            verticalAlign: VerticalAlign.CENTER,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new TextRun({ text: consultantName, bold: true, size: 32, color: DOCX_NAVY }),
+                ],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 2400, type: WidthType.DXA },
+            borders: BORDERLESS_CELL_BORDERS,
+            verticalAlign: VerticalAlign.CENTER,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.RIGHT,
+                children: [new TextRun({ text: consultantTitle, color: DOCX_ACCENT_BLUE, size: 20 })],
+              }),
+            ],
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+// Thick black divider bar, matching the template's bold horizontal rule under the header
+function buildDividerBar(): Paragraph {
+  return new Paragraph({
+    spacing: { before: 100, after: 200 },
+    border: { bottom: { style: BorderStyle.SINGLE, size: 24, color: '000000' } },
+    children: [],
+  });
+}
+
+// Two-column job entry: narrow left column for the date range, wide right column for
+// company/title/bullets - matching the template's layout exactly.
+function buildJobTable(job: JobEntry): Table {
+  const rightCellChildren: Paragraph[] = [
+    new Paragraph({ children: [new TextRun({ text: job.company, bold: true })] }),
+    new Paragraph({
+      spacing: { after: 60 },
+      children: [new TextRun({ text: job.title, italics: true })],
+    }),
+    ...job.bullets.map(
+      (bullet) =>
+        new Paragraph({
+          bullet: { level: 0 },
+          spacing: { after: 40 },
+          children: [new TextRun({ text: bullet })],
+        })
+    ),
+  ];
+
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [1800, 7560],
+    borders: {
+      top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER,
+      insideHorizontal: NO_BORDER, insideVertical: NO_BORDER,
+    },
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 1800, type: WidthType.DXA },
+            borders: BORDERLESS_CELL_BORDERS,
+            children: [new Paragraph({ children: [new TextRun({ text: job.dateRange, bold: true })] })],
+          }),
+          new TableCell({
+            width: { size: 7560, type: WidthType.DXA },
+            borders: BORDERLESS_CELL_BORDERS,
+            children: rightCellChildren,
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+// Two-column "REFERENCES  |  Available upon request" row, matching the template
+function buildReferencesTable(): Table {
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [1800, 7560],
+    borders: {
+      top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER,
+      insideHorizontal: NO_BORDER, insideVertical: NO_BORDER,
+    },
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 1800, type: WidthType.DXA },
+            borders: BORDERLESS_CELL_BORDERS,
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: 'REFERENCES', bold: true, underline: { type: UnderlineType.SINGLE } })],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 7560, type: WidthType.DXA },
+            borders: BORDERLESS_CELL_BORDERS,
+            children: [new Paragraph({ children: [new TextRun({ text: 'Available upon request', italics: true })] })],
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+function buildFooter(): Footer {
+  return new Footer({
+    children: [
+      new Paragraph({
+        border: { top: { style: BorderStyle.SINGLE, size: 4, color: '000000' } },
+        spacing: { before: 100 },
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: 'Benchmark Engineering Inc', size: 16 })],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: 'Suite 810, 396 - 11th Ave S.W. Calgary, AB T2R 0C5', size: 16 })],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: 'Phone (403) 266-5757  Fax (403) 266-5730', size: 16 })],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: 'Contact: Nels Eckland (403) 605-2684', size: 16 })],
+      }),
+    ],
+  });
+}
+
+// Pure document builder - no API calls - so it can be tested directly with fixture data
+export function buildResumeDocument(
+  structured: StructuredResume,
+  ticketLabels: string[],
+  consultantName: string,
+  consultantTitle: string
+): Document {
+  const summaryHeading = sectionHeading('SUMMARY OF EXPERIENCE');
+  const summaryParagraph = new Paragraph({
+    spacing: { after: 200 },
+    alignment: AlignmentType.JUSTIFIED,
+    children: [new TextRun({ text: structured.summary })],
+  });
+
+  const experienceHeading = sectionHeading('EXPERIENCE');
+  const jobBlocks: (Table | Paragraph)[] = [];
+  structured.jobs.forEach((job) => {
+    jobBlocks.push(buildJobTable(job));
+    jobBlocks.push(new Paragraph({ spacing: { after: 120 }, children: [] }));
+  });
+
+  const ticketsHeading = sectionHeading('EDUCATION/TICKETS');
+  const ticketParagraphs =
+    ticketLabels.length > 0
+      ? ticketLabels.map(
+          (label) =>
+            new Paragraph({
+              bullet: { level: 0 },
+              spacing: { after: 60 },
+              children: [new TextRun({ text: label })],
+            })
+        )
+      : [new Paragraph({ children: [new TextRun({ text: 'None on file yet', italics: true })] })];
+
+  return new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            size: { width: 12240, height: 15840 }, // US Letter
+            margin: { top: 720, bottom: 900, left: 1080, right: 1080 },
+          },
+        },
+        footers: { default: buildFooter() },
+        children: [
+          buildHeaderTable(consultantName, consultantTitle),
+          buildDividerBar(),
+          summaryHeading,
+          summaryParagraph,
+          experienceHeading,
+          ...jobBlocks,
+          ticketsHeading,
+          ...ticketParagraphs,
+          new Paragraph({ spacing: { before: 200 }, children: [] }),
+          buildReferencesTable(),
+        ],
+      },
+    ],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Orchestration - runs the AI reformat once, then builds both files off the same content
+// ---------------------------------------------------------------------------
+
+export interface GeneratedResumeFiles {
+  pdfBuffer: Buffer;
+  docxBuffer: Buffer;
+}
+
 export async function generatePolishedResume(
   rawResumeText: string,
   ticketLabels: string[],
   consultantName: string,
   consultantTitle: string
-): Promise<Buffer> {
+): Promise<GeneratedResumeFiles> {
   const structured = await reformatResumeContent(rawResumeText);
-  return buildResumePdf(structured, ticketLabels, consultantName, consultantTitle);
+  const [pdfBuffer, docxBuffer] = await Promise.all([
+    buildResumePdf(structured, ticketLabels, consultantName, consultantTitle),
+    Packer.toBuffer(buildResumeDocument(structured, ticketLabels, consultantName, consultantTitle)),
+  ]);
+  return { pdfBuffer, docxBuffer };
 }
