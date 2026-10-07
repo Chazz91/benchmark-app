@@ -17,6 +17,7 @@ interface ConsultantDetail {
   phone: string | null;
   discipline: string;
   title: string | null;
+  officeBased: boolean;
   status: string;
   workingStatus: string;
   currentClient: { name: string } | null;
@@ -89,6 +90,7 @@ export default function ConsultantDetailPage() {
   const [editLocation, setEditLocation] = useState('');
   const [editTitle, setEditTitle] = useState('');
   const [editDiscipline, setEditDiscipline] = useState('');
+  const [editOfficeBased, setEditOfficeBased] = useState(false);
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
   const [savingContact, setSavingContact] = useState(false);
@@ -191,6 +193,7 @@ export default function ConsultantDetailPage() {
     setEditLocation(consultant?.location || '');
     setEditTitle(consultant?.title || '');
     setEditDiscipline(consultant?.discipline || 'ALL');
+    setEditOfficeBased(consultant?.officeBased || false);
     setEditingContact(true);
   }
 
@@ -211,6 +214,7 @@ export default function ConsultantDetailPage() {
         location: editLocation || null,
         title: editTitle || null,
         discipline: editDiscipline,
+        officeBased: editOfficeBased,
       }),
     });
     setSavingContact(false);
@@ -713,6 +717,16 @@ export default function ConsultantDetailPage() {
                   />
                 </div>
               </div>
+              <label className="flex items-center gap-2 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={editOfficeBased}
+                  onChange={(e) => setEditOfficeBased(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                Office-based (e.g. Superintendent) — skip the required-tickets checklist and
+                expiry reminder emails
+              </label>
               <div className="flex gap-2">
                 <button
                   onClick={handleSaveContact}
@@ -743,6 +757,11 @@ export default function ConsultantDetailPage() {
               <div className="min-w-0">
                 <p className="text-xs text-slate-400">Job Title</p>
                 <p className="truncate text-slate-700">{consultant.title || 'Not on file'}</p>
+                {consultant.officeBased && (
+                  <p className="mt-0.5 text-xs font-medium text-slate-400">
+                    Office-based — no ticket reminders
+                  </p>
+                )}
               </div>
               <div className="min-w-0">
                 <p className="text-xs text-slate-400">Email</p>
