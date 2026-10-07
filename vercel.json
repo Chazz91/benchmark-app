@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/ticket-expiry",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/missing-resume",
+      "schedule": "0 14 * * 1"
     }
   ]
 }

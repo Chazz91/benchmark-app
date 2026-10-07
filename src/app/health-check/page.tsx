@@ -19,6 +19,47 @@ function EnvCheck({ label, isSet }: { label: string; isSet: boolean }) {
   );
 }
 
+function CronStatusCard({
+  title,
+  expectedHours,
+  status,
+}: {
+  title: string;
+  expectedHours: number;
+  status: { lastCronRunAt: Date | null; lastCronResult: string | null } | null;
+}) {
+  const hoursSinceCron = status?.lastCronRunAt
+    ? Math.round((Date.now() - new Date(status.lastCronRunAt).getTime()) / (1000 * 60 * 60))
+    : null;
+  const isLate = hoursSinceCron !== null && hoursSinceCron > expectedHours;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <h2 className="mb-2 text-sm font-semibold text-slate-800">{title}</h2>
+      {status?.lastCronRunAt ? (
+        <div>
+          <p className={isLate ? 'text-sm font-medium text-red-600' : 'text-sm font-medium text-green-700'}>
+            Last ran {new Date(status.lastCronRunAt).toLocaleString('en-CA')}
+            {hoursSinceCron !== null && ` (${hoursSinceCron}h ago)`}
+          </p>
+          {isLate && (
+            <p className="mt-1 text-xs text-red-600">
+              This is running less often than expected - worth checking the cron job in your
+              Vercel project settings.
+            </p>
+          )}
+          {status.lastCronResult && <p className="mt-2 text-xs text-slate-500">Last result: {status.lastCronResult}</p>}
+        </div>
+      ) : (
+        <p className="text-sm text-amber-600">
+          No record of this ever running yet - expected until this is deployed live with Vercel
+          Cron enabled (it won't fire automatically inside a Codespace).
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default async function HealthCheckPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
@@ -34,7 +75,8 @@ export default async function HealthCheckPage() {
     teamMessageCount,
     activityLogCount,
     recentActivity,
-    systemStatus,
+    ticketExpiryStatus,
+    missingResumeStatus,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.consultant.count(),
@@ -50,6 +92,7 @@ export default async function HealthCheckPage() {
       include: { user: { select: { name: true } } },
     }),
     prisma.systemStatus.findUnique({ where: { id: 'singleton' } }),
+    prisma.systemStatus.findUnique({ where: { id: 'missing-resume-cron' } }),
   ]);
 
   const envChecks = [
@@ -63,47 +106,14 @@ export default async function HealthCheckPage() {
     { label: 'NextAuth secret (NEXTAUTH_SECRET)', isSet: !!process.env.NEXTAUTH_SECRET },
   ];
 
-  const hoursSinceCron = systemStatus?.lastCronRunAt
-    ? Math.round((Date.now() - new Date(systemStatus.lastCronRunAt).getTime()) / (1000 * 60 * 60))
-    : null;
-
   return (
     <div>
       <NavBar />
       <PageHeader title="Health Check" subtitle="Private system status - visible only to your account." />
       <main className="mx-auto max-w-4xl space-y-6 px-6 py-8">
         {/* Cron status */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <h2 className="mb-2 text-sm font-semibold text-slate-800">Daily Ticket-Expiry Cron Job</h2>
-          {systemStatus?.lastCronRunAt ? (
-            <div>
-              <p
-                className={
-                  hoursSinceCron !== null && hoursSinceCron > 30
-                    ? 'text-sm font-medium text-red-600'
-                    : 'text-sm font-medium text-green-700'
-                }
-              >
-                Last ran {new Date(systemStatus.lastCronRunAt).toLocaleString('en-CA')}
-                {hoursSinceCron !== null && ` (${hoursSinceCron}h ago)`}
-              </p>
-              {hoursSinceCron !== null && hoursSinceCron > 30 && (
-                <p className="mt-1 text-xs text-red-600">
-                  This is running less often than expected (should run daily) - worth checking
-                  the cron job in your Vercel project settings.
-                </p>
-              )}
-              {systemStatus.lastCronResult && (
-                <p className="mt-2 text-xs text-slate-500">Last result: {systemStatus.lastCronResult}</p>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-amber-600">
-              No record of this ever running yet - expected until this is deployed live with
-              Vercel Cron enabled (it won't fire automatically inside a Codespace).
-            </p>
-          )}
-        </div>
+        <CronStatusCard title="Daily Ticket-Expiry Cron Job" expectedHours={30} status={ticketExpiryStatus} />
+        <CronStatusCard title="Weekly Missing-Resume Cron Job" expectedHours={7 * 24 + 6} status={missingResumeStatus} />
 
         {/* Environment configuration */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
