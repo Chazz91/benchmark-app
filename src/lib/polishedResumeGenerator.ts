@@ -106,8 +106,15 @@ async function reformatResumeContent(rawText: string): Promise<StructuredResume>
 // generic field role, regardless of whatever their actual internal title is on file.
 const WELLSITE_SUPERVISOR_DISCIPLINES = new Set(['DRILLING', 'COMPLETIONS']);
 
-export function resolveResumeTitle(discipline: string, title: string | null | undefined): string {
-  if (WELLSITE_SUPERVISOR_DISCIPLINES.has(discipline)) return 'Wellsite Supervisor';
+// officeBased consultants (mostly Drilling/Completions Superintendents working out of the
+// Calgary office) keep their actual title - the generic "Wellsite Supervisor" override only
+// makes sense for the field role it's named after.
+export function resolveResumeTitle(
+  discipline: string,
+  title: string | null | undefined,
+  officeBased = false
+): string {
+  if (!officeBased && WELLSITE_SUPERVISOR_DISCIPLINES.has(discipline)) return 'Wellsite Supervisor';
   return title || '';
 }
 
@@ -163,8 +170,11 @@ const ADDITIONAL_COMPLETIONS_TICKETS: { label: string; matchTerms: string[] }[] 
   { label: 'Wildlife Awareness', matchTerms: ['wildlife awareness'] },
 ];
 
-export function resolveResumeTickets(discipline: string, onFileLabels: string[]): string[] {
-  const coreTickets = CORE_TICKETS_BY_DISCIPLINE[discipline];
+// officeBased consultants don't get the assumed field core-ticket list injected - an office
+// Superintendent's resume should only ever list what's actually on file for them, the same as
+// every discipline outside Drilling/Completions already does.
+export function resolveResumeTickets(discipline: string, onFileLabels: string[], officeBased = false): string[] {
+  const coreTickets = officeBased ? undefined : CORE_TICKETS_BY_DISCIPLINE[discipline];
   if (!coreTickets) return onFileLabels;
 
   const normalizedOnFile = onFileLabels.map((label) => label.trim().toLowerCase());

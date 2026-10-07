@@ -39,12 +39,12 @@ export async function POST(request: Request) {
 
   try {
     const onFileTicketLabels = consultant.tickets.map((t) => t.ticketType.label);
-    const ticketLabels = resolveResumeTickets(consultant.discipline, onFileTicketLabels);
+    const ticketLabels = resolveResumeTickets(consultant.discipline, onFileTicketLabels, consultant.officeBased);
     const { pdfBuffer, docxBuffer } = await generatePolishedResume(
       sourceResume.rawText,
       ticketLabels,
       name,
-      resolveResumeTitle(consultant.discipline, consultant.title)
+      resolveResumeTitle(consultant.discipline, consultant.title, consultant.officeBased)
     );
 
     const baseName = `${name} - Benchmark Resume`;
