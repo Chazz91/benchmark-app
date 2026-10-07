@@ -528,6 +528,21 @@ export default function ConsultantDetailPage() {
         }
       />
       <main className="mx-auto max-w-4xl px-6 py-8">
+        <button
+          onClick={() => {
+            // If there's nowhere to go back to (opened directly via a shared link, a new tab,
+            // etc.), router.back() would just leave the app entirely - fall back to the main
+            // consultants list instead.
+            if (window.history.length > 1) {
+              router.back();
+            } else {
+              router.push('/consultants');
+            }
+          }}
+          className="mb-4 text-sm text-brand-700 hover:underline"
+        >
+          ← Back
+        </button>
         {!consultant.userId && (
           <div className="mb-6 flex items-center justify-between rounded-2xl border border-gold-400/50 bg-gold-500/10 p-4">
             <div>
