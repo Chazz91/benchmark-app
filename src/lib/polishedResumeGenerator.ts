@@ -259,20 +259,28 @@ export function buildResumePdf(
     const titleColWidth = contentWidth * LOGO_COL_RATIO;
     const headerTop = doc.y;
 
-    doc.image(Buffer.from(BENCHMARK_LOGO_BASE64, 'base64'), left, headerTop, { width: 139 });
+    const LOGO_WIDTH = 139;
+    const LOGO_ASPECT = 1225 / 325; // the Benchmark logo's native pixel dimensions
+    const logoBottom = headerTop + LOGO_WIDTH / LOGO_ASPECT;
+
+    doc.image(Buffer.from(BENCHMARK_LOGO_BASE64, 'base64'), left, headerTop, { width: LOGO_WIDTH });
+
+    // Name and title sit on the same baseline as the bottom of the logo, rather than being
+    // top-aligned near headerTop, so bottom-align each by its own line height.
+    doc.font('Carlito-Bold').fontSize(16);
+    const nameY = logoBottom - doc.currentLineHeight();
     doc
-      .font('Carlito-Bold')
-      .fontSize(16)
       .fillColor(PDF_NAVY)
-      .text(consultantName, left + logoColWidth + GUTTER, headerTop + 10, {
+      .text(consultantName, left + logoColWidth + GUTTER, nameY, {
         width: nameColWidth - GUTTER * 2,
         align: 'center',
       });
+
+    doc.font('Carlito').fontSize(10);
+    const titleY = logoBottom - doc.currentLineHeight();
     doc
-      .font('Carlito')
-      .fontSize(10)
       .fillColor(PDF_ACCENT_BLUE)
-      .text(consultantTitle || '', left + logoColWidth + nameColWidth + GUTTER, headerTop + 10, {
+      .text(consultantTitle || '', left + logoColWidth + nameColWidth + GUTTER, titleY, {
         width: titleColWidth - GUTTER,
         align: 'right',
       });
