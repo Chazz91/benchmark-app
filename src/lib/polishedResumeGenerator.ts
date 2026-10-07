@@ -111,14 +111,29 @@ export function resolveResumeTitle(discipline: string, title: string | null | un
   return title || '';
 }
 
+// The actual course/certificate name, not the informal "IRP 7" shorthand - this is the
+// regulatory-awareness course every wellsite supervisor is expected to have completed,
+// regardless of discipline.
+const SAFETY_MANAGEMENT_COURSE = 'Safety Management and Regulatory Awareness for Wellsite Supervision';
+
 // Core tickets always shown on a Drilling/Completions resume, regardless of what's actually
 // on file for that specific consultant - these are the baseline certifications every field
-// consultant in that discipline is expected to carry.
+// consultant in that discipline is expected to carry. Well control is listed by its actual
+// certificate name, not an informal abbreviation, and differs by discipline.
 const CORE_TICKETS_BY_DISCIPLINE: Record<string, string[]> = {
-  DRILLING: ['Second Line', 'IRP 7/Safety Management', 'H2S', 'First Aid', 'WHMIS', 'TDG', 'CSO', "Driver's Licence"],
+  DRILLING: [
+    'Second Line Supervisor Well Control',
+    SAFETY_MANAGEMENT_COURSE,
+    'H2S',
+    'First Aid',
+    'WHMIS',
+    'TDG',
+    'CSO',
+    "Driver's Licence",
+  ],
   COMPLETIONS: [
-    'Well Service BOP',
-    'IRP 7/Safety Management',
+    'Well Service Blowout Prevention',
+    SAFETY_MANAGEMENT_COURSE,
     'H2S',
     'First Aid',
     'WHMIS',
@@ -128,16 +143,21 @@ const CORE_TICKETS_BY_DISCIPLINE: Record<string, string[]> = {
   ],
 };
 
-// Beyond the Completions core list, these only show up if the consultant actually has them
-// on file - unlike the core list, they're not assumed to apply to everyone in the discipline.
-const ADDITIONAL_COMPLETIONS_TICKETS = [
-  'Coiled Tubing BOP',
-  'Confined Space',
-  'Fall Protection',
-  'Ground Disturbance',
-  'ICS-100',
-  'NORM',
-  'Wildlife Awareness',
+// Beyond the Completions core list, these only show up if the consultant actually has them on
+// file - unlike the core list, they're not assumed to apply to everyone in the discipline. Each
+// has the certificate's actual name (what shows on the resume) plus the shorter forms a ticket
+// might realistically be filed under in the system, since that's what gets matched against.
+const ADDITIONAL_COMPLETIONS_TICKETS: { label: string; matchTerms: string[] }[] = [
+  {
+    label: 'Coiled Tubing Well Servicing Blowout Prevention',
+    matchTerms: ['coiled tubing well servicing blowout prevention', 'coiled tubing bop', 'coiled tubing blowout prevention'],
+  },
+  { label: 'Confined Space', matchTerms: ['confined space'] },
+  { label: 'Fall Protection', matchTerms: ['fall protection'] },
+  { label: 'Ground Disturbance', matchTerms: ['ground disturbance'] },
+  { label: 'ICS-100', matchTerms: ['ics-100', 'ics 100'] },
+  { label: 'NORM', matchTerms: ['norm'] },
+  { label: 'Wildlife Awareness', matchTerms: ['wildlife awareness'] },
 ];
 
 export function resolveResumeTickets(discipline: string, onFileLabels: string[]): string[] {
@@ -149,7 +169,7 @@ export function resolveResumeTickets(discipline: string, onFileLabels: string[])
 
   if (discipline === 'COMPLETIONS') {
     for (const extra of ADDITIONAL_COMPLETIONS_TICKETS) {
-      if (onFileSet.has(extra.toLowerCase())) tickets.push(extra);
+      if (extra.matchTerms.some((term) => onFileSet.has(term))) tickets.push(extra.label);
     }
   }
 
