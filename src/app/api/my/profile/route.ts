@@ -26,7 +26,10 @@ export async function GET() {
       where: { userId: session.user.id },
       include: {
         currentClient: true,
-        resumes: { orderBy: { createdAt: 'desc' } },
+        // Never the polished "Benchmark Format" resume generated for clients/staff - a
+        // consultant only ever sees their own original upload(s), same as evaluations below
+        // never reaching them with the written feedback.
+        resumes: { where: { isFormatted: false }, orderBy: { createdAt: 'desc' } },
         evaluations: {
           // Consultants only ever see their scores, never the written comments/feedback -
           // that's restricted to internal staff. Selecting only these fields means the

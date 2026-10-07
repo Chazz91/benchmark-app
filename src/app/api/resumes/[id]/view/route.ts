@@ -17,7 +17,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (!resume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const isStaff = ['ADMIN', 'RECRUITER', 'VIEWER'].includes(session.user.role);
-  const isOwner = session.user.role === 'CONSULTANT' && resume.consultant.userId === session.user.id;
+  // A consultant can view their own original upload(s), but never the polished "Benchmark
+  // Format" resume generated for clients/staff - enforced here too, not just by hiding it
+  // from their profile list, so a known resume id can't be used to view it directly either.
+  const isOwner =
+    session.user.role === 'CONSULTANT' && resume.consultant.userId === session.user.id && !resume.isFormatted;
 
   if (!isStaff && !isOwner) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
