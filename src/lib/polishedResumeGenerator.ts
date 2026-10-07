@@ -145,16 +145,19 @@ const CORE_TICKETS_BY_DISCIPLINE: Record<string, string[]> = {
 
 // Beyond the Completions core list, these only show up if the consultant actually has them on
 // file - unlike the core list, they're not assumed to apply to everyone in the discipline. Each
-// has the certificate's actual name (what shows on the resume) plus the shorter forms a ticket
-// might realistically be filed under in the system, since that's what gets matched against.
+// has the certificate's actual name (what shows on the resume) plus substrings a ticket might
+// realistically be filed under in the system's Ticket Types list, matched case-insensitively
+// against whatever's actually on file. "NORM" has no matching ticket type in the system as of
+// writing - this just won't fire until one exists, no action needed either way.
 const ADDITIONAL_COMPLETIONS_TICKETS: { label: string; matchTerms: string[] }[] = [
   {
     label: 'Coiled Tubing Well Servicing Blowout Prevention',
-    matchTerms: ['coiled tubing well servicing blowout prevention', 'coiled tubing bop', 'coiled tubing blowout prevention'],
+    // exact on-file label is "Coiled Tubing Well Servicing BOP's"
+    matchTerms: ["coiled tubing well servicing bop's", 'coiled tubing well servicing bops', 'coiled tubing'],
   },
-  { label: 'Confined Space', matchTerms: ['confined space'] },
+  { label: 'Confined Space', matchTerms: ['confined space'] }, // on file as "Confined Space Entry"
   { label: 'Fall Protection', matchTerms: ['fall protection'] },
-  { label: 'Ground Disturbance', matchTerms: ['ground disturbance'] },
+  { label: 'Ground Disturbance', matchTerms: ['ground disturbance'] }, // on file as "Ground Disturbance Level II"
   { label: 'ICS-100', matchTerms: ['ics-100', 'ics 100'] },
   { label: 'NORM', matchTerms: ['norm'] },
   { label: 'Wildlife Awareness', matchTerms: ['wildlife awareness'] },
@@ -164,12 +167,13 @@ export function resolveResumeTickets(discipline: string, onFileLabels: string[])
   const coreTickets = CORE_TICKETS_BY_DISCIPLINE[discipline];
   if (!coreTickets) return onFileLabels;
 
-  const onFileSet = new Set(onFileLabels.map((label) => label.trim().toLowerCase()));
+  const normalizedOnFile = onFileLabels.map((label) => label.trim().toLowerCase());
   const tickets = [...coreTickets];
 
   if (discipline === 'COMPLETIONS') {
     for (const extra of ADDITIONAL_COMPLETIONS_TICKETS) {
-      if (extra.matchTerms.some((term) => onFileSet.has(term))) tickets.push(extra.label);
+      const isOnFile = extra.matchTerms.some((term) => normalizedOnFile.some((label) => label.includes(term)));
+      if (isOnFile) tickets.push(extra.label);
     }
   }
 
