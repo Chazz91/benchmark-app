@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { uploadResumeFile } from '@/lib/storage';
-import { generatePolishedResume } from '@/lib/polishedResumeGenerator';
+import { generatePolishedResume, resolveResumeTitle } from '@/lib/polishedResumeGenerator';
 
 export const maxDuration = 60;
 
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       sourceResume.rawText,
       ticketLabels,
       name,
-      consultant.title || ''
+      resolveResumeTitle(consultant.discipline, consultant.title)
     );
 
     const baseName = `${name} - Benchmark Resume`;
