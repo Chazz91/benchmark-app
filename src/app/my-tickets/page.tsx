@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import NavBar from '@/components/NavBar';
 import PageHeader from '@/components/PageHeader';
+import FileDropzone from '@/components/FileDropzone';
 import clsx from 'clsx';
 
 interface TicketType {
@@ -37,6 +38,7 @@ interface ReviewRow extends DetectedTicket {
   expiryDateEdit: string;
   noExpiryEdit: boolean;
   include: boolean;
+  sourceFileIndex: number;
 }
 
 function daysUntil(dateStr: string) {
@@ -55,8 +57,9 @@ export default function MyTicketsPage() {
   const [saving, setSaving] = useState(false);
 
   // Scan-a-photo flow
-  const [scanFile, setScanFile] = useState<File | null>(null);
+  const [scanFiles, setScanFiles] = useState<File[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState('');
   const [scanError, setScanError] = useState('');
   const [reviewRows, setReviewRows] = useState<ReviewRow[] | null>(null);
   const [savingReview, setSavingReview] = useState(false);
@@ -109,33 +112,47 @@ export default function MyTicketsPage() {
   }
 
   async function handleScan() {
-    if (!scanFile) return;
+    if (scanFiles.length === 0) return;
     setScanning(true);
     setScanError('');
     setReviewRows(null);
 
-    const formData = new FormData();
-    formData.append('file', scanFile);
+    const allRows: ReviewRow[] = [];
+    const errors: string[] = [];
 
-    try {
-      const res = await fetch('/api/my/tickets/parse-document', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not read that image');
+    // One file, one request, one at a time - each photo needs its own Claude call, and
+    // bundling several into a single request is exactly what risks a timeout on a slow
+    // connection with multiple full-size phone photos.
+    for (let i = 0; i < scanFiles.length; i++) {
+      setScanProgress(`Reading photo ${i + 1} of ${scanFiles.length}…`);
+      const formData = new FormData();
+      formData.append('file', scanFiles[i]);
 
-      const rows: ReviewRow[] = (data.detected || []).map((d: DetectedTicket) => ({
-        ...d,
-        selectedTicketTypeId: d.matchedTicketTypeId || '',
-        issueDateEdit: d.issueDate || '',
-        expiryDateEdit: d.expiryDate || '',
-        noExpiryEdit: !d.expiryDate,
-        include: true,
-      }));
-      setReviewRows(rows);
-    } catch (err) {
-      setScanError((err as Error).message);
-    } finally {
-      setScanning(false);
+      try {
+        const res = await fetch('/api/my/tickets/parse-document', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not read that image');
+
+        (data.detected || []).forEach((d: DetectedTicket) => {
+          allRows.push({
+            ...d,
+            selectedTicketTypeId: d.matchedTicketTypeId || '',
+            issueDateEdit: d.issueDate || '',
+            expiryDateEdit: d.expiryDate || '',
+            noExpiryEdit: !d.expiryDate,
+            include: true,
+            sourceFileIndex: i,
+          });
+        });
+      } catch (err) {
+        errors.push(`${scanFiles[i].name}: ${(err as Error).message}`);
+      }
     }
+
+    setScanProgress('');
+    setScanning(false);
+    setReviewRows(allRows);
+    if (errors.length > 0) setScanError(errors.join('; '));
   }
 
   function updateRow(index: number, changes: Partial<ReviewRow>) {
@@ -161,13 +178,14 @@ export default function MyTicketsPage() {
       formData.append('issueDate', row.issueDateEdit);
       formData.append('noExpiry', row.noExpiryEdit ? 'true' : 'false');
       if (!row.noExpiryEdit) formData.append('expiryDate', row.expiryDateEdit);
-      if (scanFile) formData.append('file', scanFile);
+      const sourceFile = scanFiles[row.sourceFileIndex];
+      if (sourceFile) formData.append('file', sourceFile);
       await fetch('/api/my/tickets', { method: 'POST', body: formData });
     }
 
     setSavingReview(false);
     setReviewRows(null);
-    setScanFile(null);
+    setScanFiles([]);
     load();
   }
 
@@ -187,22 +205,31 @@ export default function MyTicketsPage() {
             everything before it's saved.
           </p>
 
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+          <FileDropzone onFiles={(files) => setScanFiles(files)} disabled={scanning} className="mt-3 bg-slate-50">
             <input
               type="file"
               accept="image/*,.pdf"
-              onChange={(e) => setScanFile(e.target.files?.[0] || null)}
+              multiple
+              onChange={(e) => setScanFiles(Array.from(e.target.files || []))}
+              disabled={scanning}
               className="text-sm"
             />
-            <button
-              onClick={handleScan}
-              disabled={!scanFile || scanning}
-              className="rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
-            >
-              {scanning ? 'Reading photo…' : 'Scan'}
-            </button>
-          </div>
+            {scanFiles.length > 0 && (
+              <p className="mt-1 text-xs text-slate-500">{scanFiles.length} file(s) selected</p>
+            )}
+            <p className="mt-1 text-xs text-slate-500">or drag and drop ticket photos here</p>
+            <div>
+              <button
+                onClick={handleScan}
+                disabled={scanFiles.length === 0 || scanning}
+                className="mt-2 rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
+              >
+                {scanning ? 'Reading…' : scanFiles.length > 1 ? `Scan ${scanFiles.length} Photos` : 'Scan'}
+              </button>
+            </div>
+          </FileDropzone>
 
+          {scanProgress && <p className="mt-2 text-sm text-slate-500">{scanProgress}</p>}
           {scanError && <p className="mt-2 text-sm text-red-600">{scanError}</p>}
 
           {reviewRows && reviewRows.length > 0 && (
@@ -286,7 +313,7 @@ export default function MyTicketsPage() {
                 <button
                   onClick={() => {
                     setReviewRows(null);
-                    setScanFile(null);
+                    setScanFiles([]);
                   }}
                   className="rounded-lg bg-slate-100 px-4 py-1.5 text-sm text-slate-700 hover:bg-slate-200"
                 >
