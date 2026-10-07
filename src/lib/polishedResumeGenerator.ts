@@ -17,6 +17,11 @@ import {
   Footer,
 } from 'docx';
 import { BENCHMARK_LOGO_BASE64 } from '@/lib/benchmarkLogo';
+import {
+  CARLITO_REGULAR_BASE64,
+  CARLITO_BOLD_BASE64,
+  CARLITO_ITALIC_BASE64,
+} from '@/lib/carlitoFont';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -97,6 +102,84 @@ async function reformatResumeContent(rawText: string): Promise<StructuredResume>
   return parsed;
 }
 
+// Drilling and Completions consultants are always presented to clients under the same
+// generic field role, regardless of whatever their actual internal title is on file.
+const WELLSITE_SUPERVISOR_DISCIPLINES = new Set(['DRILLING', 'COMPLETIONS']);
+
+export function resolveResumeTitle(discipline: string, title: string | null | undefined): string {
+  if (WELLSITE_SUPERVISOR_DISCIPLINES.has(discipline)) return 'Wellsite Supervisor';
+  return title || '';
+}
+
+// The actual course/certificate name, not the informal "IRP 7" shorthand - this is the
+// regulatory-awareness course every wellsite supervisor is expected to have completed,
+// regardless of discipline.
+const SAFETY_MANAGEMENT_COURSE = 'Safety Management and Regulatory Awareness for Wellsite Supervision';
+
+// Core tickets always shown on a Drilling/Completions resume, regardless of what's actually
+// on file for that specific consultant - these are the baseline certifications every field
+// consultant in that discipline is expected to carry. Well control is listed by its actual
+// certificate name, not an informal abbreviation, and differs by discipline.
+const CORE_TICKETS_BY_DISCIPLINE: Record<string, string[]> = {
+  DRILLING: [
+    'Second Line Supervisor Well Control',
+    SAFETY_MANAGEMENT_COURSE,
+    'H2S',
+    'First Aid',
+    'WHMIS',
+    'TDG',
+    'CSO',
+    "Driver's Licence",
+  ],
+  COMPLETIONS: [
+    'Well Service Blowout Prevention',
+    SAFETY_MANAGEMENT_COURSE,
+    'H2S',
+    'First Aid',
+    'WHMIS',
+    'TDG',
+    'CSO',
+    "Driver's Licence",
+  ],
+};
+
+// Beyond the Completions core list, these only show up if the consultant actually has them on
+// file - unlike the core list, they're not assumed to apply to everyone in the discipline. Each
+// has the certificate's actual name (what shows on the resume) plus substrings a ticket might
+// realistically be filed under in the system's Ticket Types list, matched case-insensitively
+// against whatever's actually on file. "NORM" has no matching ticket type in the system as of
+// writing - this just won't fire until one exists, no action needed either way.
+const ADDITIONAL_COMPLETIONS_TICKETS: { label: string; matchTerms: string[] }[] = [
+  {
+    label: 'Coiled Tubing Well Servicing Blowout Prevention',
+    // exact on-file label is "Coiled Tubing Well Servicing BOP's"
+    matchTerms: ["coiled tubing well servicing bop's", 'coiled tubing well servicing bops', 'coiled tubing'],
+  },
+  { label: 'Confined Space', matchTerms: ['confined space'] }, // on file as "Confined Space Entry"
+  { label: 'Fall Protection', matchTerms: ['fall protection'] },
+  { label: 'Ground Disturbance', matchTerms: ['ground disturbance'] }, // on file as "Ground Disturbance Level II"
+  { label: 'ICS-100', matchTerms: ['ics-100', 'ics 100'] },
+  { label: 'NORM', matchTerms: ['norm'] },
+  { label: 'Wildlife Awareness', matchTerms: ['wildlife awareness'] },
+];
+
+export function resolveResumeTickets(discipline: string, onFileLabels: string[]): string[] {
+  const coreTickets = CORE_TICKETS_BY_DISCIPLINE[discipline];
+  if (!coreTickets) return onFileLabels;
+
+  const normalizedOnFile = onFileLabels.map((label) => label.trim().toLowerCase());
+  const tickets = [...coreTickets];
+
+  if (discipline === 'COMPLETIONS') {
+    for (const extra of ADDITIONAL_COMPLETIONS_TICKETS) {
+      const isOnFile = extra.matchTerms.some((term) => normalizedOnFile.some((label) => label.includes(term)));
+      if (isOnFile) tickets.push(extra.label);
+    }
+  }
+
+  return tickets;
+}
+
 const PDF_NAVY = '#1F4E79';
 const PDF_ACCENT_BLUE = '#4472C4';
 // Matches the original Word template's page setup (0.5in top, 0.625in sides, 0.75in bottom)
@@ -116,7 +199,7 @@ const GUTTER = 10; // approximates Word's default table-cell padding between adj
 function addPdfSectionHeading(doc: PDFKit.PDFDocument, text: string) {
   doc.x = doc.page.margins.left;
   doc.y += 15; // spacing before: 300 twips
-  doc.font('Helvetica-Bold').fontSize(BODY_SIZE).fillColor('black').text(text, { underline: true });
+  doc.font('Carlito-Bold').fontSize(BODY_SIZE).fillColor('black').text(text, { underline: true });
   doc.y += 6; // spacing after: 120 twips
 }
 
@@ -134,7 +217,7 @@ function addFooter(doc: PDFKit.PDFDocument) {
   doc.moveTo(left, footerTop).lineTo(right, footerTop).lineWidth(1).strokeColor('black').stroke();
   doc.x = left;
   doc.y = footerTop + 6;
-  doc.font('Helvetica').fontSize(8).fillColor('black');
+  doc.font('Carlito').fontSize(8).fillColor('black');
   doc.text('Benchmark Engineering Inc', { width: right - left, align: 'center' });
   doc.text('Suite 810, 396 - 11th Ave S.W. Calgary, AB T2R 0C5', { width: right - left, align: 'center' });
   doc.text('Phone (403) 266-5757  Fax (403) 266-5730', { width: right - left, align: 'center' });
@@ -162,6 +245,10 @@ export function buildResumePdf(
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
+    doc.registerFont('Carlito', Buffer.from(CARLITO_REGULAR_BASE64, 'base64'));
+    doc.registerFont('Carlito-Bold', Buffer.from(CARLITO_BOLD_BASE64, 'base64'));
+    doc.registerFont('Carlito-Italic', Buffer.from(CARLITO_ITALIC_BASE64, 'base64'));
+
     const left = doc.page.margins.left;
     const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
@@ -172,26 +259,34 @@ export function buildResumePdf(
     const titleColWidth = contentWidth * LOGO_COL_RATIO;
     const headerTop = doc.y;
 
-    doc.image(Buffer.from(BENCHMARK_LOGO_BASE64, 'base64'), left, headerTop, { width: 139 });
+    const LOGO_WIDTH = 139;
+    const LOGO_ASPECT = 1225 / 325; // the Benchmark logo's native pixel dimensions
+    const logoBottom = headerTop + LOGO_WIDTH / LOGO_ASPECT;
+
+    doc.image(Buffer.from(BENCHMARK_LOGO_BASE64, 'base64'), left, headerTop, { width: LOGO_WIDTH });
+
+    // Name and title sit on the same baseline as the bottom of the logo, rather than being
+    // top-aligned near headerTop, so bottom-align each by its own line height.
+    doc.font('Carlito-Bold').fontSize(16);
+    const nameY = logoBottom - doc.currentLineHeight();
     doc
-      .font('Helvetica-Bold')
-      .fontSize(16)
       .fillColor(PDF_NAVY)
-      .text(consultantName, left + logoColWidth + GUTTER, headerTop + 10, {
+      .text(consultantName, left + logoColWidth + GUTTER, nameY, {
         width: nameColWidth - GUTTER * 2,
         align: 'center',
       });
+
+    doc.font('Carlito').fontSize(10);
+    const titleY = logoBottom - doc.currentLineHeight();
     doc
-      .font('Helvetica')
-      .fontSize(10)
       .fillColor(PDF_ACCENT_BLUE)
-      .text(consultantTitle || '', left + logoColWidth + nameColWidth + GUTTER, headerTop + 10, {
+      .text(consultantTitle || '', left + logoColWidth + nameColWidth + GUTTER, titleY, {
         width: titleColWidth - GUTTER,
         align: 'right',
       });
 
     // Thick divider bar under the header, matching the template's bold horizontal rule
-    const dividerY = headerTop + 50;
+    const dividerY = headerTop + 42;
     doc
       .moveTo(left, dividerY)
       .lineTo(doc.page.width - doc.page.margins.right, dividerY)
@@ -203,7 +298,7 @@ export function buildResumePdf(
     doc.fillColor('black');
 
     addPdfSectionHeading(doc, 'SUMMARY OF EXPERIENCE');
-    doc.font('Helvetica').fontSize(BODY_SIZE).fillColor('black').text(structured.summary, { align: 'justify' });
+    doc.font('Carlito').fontSize(BODY_SIZE).fillColor('black').text(structured.summary, { align: 'justify' });
 
     // --- Experience: two-column rows (narrow date column | company/title/bullets column),
     // matching the original Word template's 1800:7560 twip job tables ---
@@ -216,18 +311,18 @@ export function buildResumePdf(
       if (doc.y > doc.page.height - doc.page.margins.bottom - 60) doc.addPage();
       const rowTop = doc.y;
 
-      doc.font('Helvetica-Bold').fontSize(BODY_SIZE).fillColor('black').text(job.dateRange, left, rowTop, {
+      doc.font('Carlito-Bold').fontSize(BODY_SIZE).fillColor('black').text(job.dateRange, left, rowTop, {
         width: dateColWidth,
       });
 
       doc.x = roleColX;
       doc.y = rowTop;
-      doc.font('Helvetica-Bold').fontSize(BODY_SIZE).fillColor('black').text(job.company, { width: roleColWidth });
-      doc.font('Helvetica-Oblique').fontSize(BODY_SIZE).fillColor('black').text(job.title, { width: roleColWidth });
+      doc.font('Carlito-Bold').fontSize(BODY_SIZE).fillColor('black').text(job.company, { width: roleColWidth });
+      doc.font('Carlito-Italic').fontSize(BODY_SIZE).fillColor('black').text(job.title, { width: roleColWidth });
       doc.y += 3; // spacing after the title line: 60 twips
       if (job.bullets.length > 0) {
         doc.x = roleColX;
-        doc.font('Helvetica').fontSize(BODY_SIZE).list(job.bullets, { width: roleColWidth, bulletRadius: 1.5, textIndent: 14 });
+        doc.font('Carlito').fontSize(BODY_SIZE).list(job.bullets, { width: roleColWidth, bulletRadius: 1.5, textIndent: 14 });
       }
 
       doc.x = left;
@@ -236,9 +331,9 @@ export function buildResumePdf(
 
     addPdfSectionHeading(doc, 'EDUCATION/TICKETS');
     if (ticketLabels.length > 0) {
-      doc.font('Helvetica').fontSize(BODY_SIZE).list(ticketLabels, { bulletRadius: 1.5, textIndent: 14 });
+      doc.font('Carlito').fontSize(BODY_SIZE).list(ticketLabels, { bulletRadius: 1.5, textIndent: 14 });
     } else {
-      doc.font('Helvetica-Oblique').fontSize(BODY_SIZE).fillColor('black').text('None on file yet');
+      doc.font('Carlito-Italic').fontSize(BODY_SIZE).fillColor('black').text('None on file yet');
     }
 
     // --- References: same two-column layout as the job rows ---
@@ -246,12 +341,12 @@ export function buildResumePdf(
     doc.y += 10;
     const refRowTop = doc.y;
     doc
-      .font('Helvetica-Bold')
+      .font('Carlito-Bold')
       .fontSize(BODY_SIZE)
       .fillColor('black')
       .text('REFERENCES', left, refRowTop, { width: dateColWidth, underline: true });
     doc
-      .font('Helvetica-Oblique')
+      .font('Carlito-Italic')
       .fontSize(BODY_SIZE)
       .fillColor('black')
       .text('Available upon request', roleColX, refRowTop, { width: roleColWidth });
@@ -281,7 +376,7 @@ const BORDERLESS_CELL_BORDERS = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BO
 function sectionHeading(text: string): Paragraph {
   return new Paragraph({
     spacing: { before: 300, after: 120 },
-    children: [new TextRun({ text, bold: true, underline: { type: UnderlineType.SINGLE } })],
+    children: [new TextRun({ font: 'Calibri',  text, bold: true, underline: { type: UnderlineType.SINGLE } })],
   });
 }
 
@@ -321,7 +416,7 @@ function buildHeaderTable(consultantName: string, consultantTitle: string): Tabl
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [
-                  new TextRun({ text: consultantName, bold: true, size: 32, color: DOCX_NAVY }),
+                  new TextRun({ font: 'Calibri',  text: consultantName, bold: true, size: 32, color: DOCX_NAVY }),
                 ],
               }),
             ],
@@ -333,7 +428,7 @@ function buildHeaderTable(consultantName: string, consultantTitle: string): Tabl
             children: [
               new Paragraph({
                 alignment: AlignmentType.RIGHT,
-                children: [new TextRun({ text: consultantTitle, color: DOCX_ACCENT_BLUE, size: 20 })],
+                children: [new TextRun({ font: 'Calibri',  text: consultantTitle, color: DOCX_ACCENT_BLUE, size: 20 })],
               }),
             ],
           }),
@@ -356,17 +451,17 @@ function buildDividerBar(): Paragraph {
 // company/title/bullets - matching the template's layout exactly.
 function buildJobTable(job: JobEntry): Table {
   const rightCellChildren: Paragraph[] = [
-    new Paragraph({ children: [new TextRun({ text: job.company, bold: true })] }),
+    new Paragraph({ children: [new TextRun({ font: 'Calibri',  text: job.company, bold: true })] }),
     new Paragraph({
       spacing: { after: 60 },
-      children: [new TextRun({ text: job.title, italics: true })],
+      children: [new TextRun({ font: 'Calibri',  text: job.title, italics: true })],
     }),
     ...job.bullets.map(
       (bullet) =>
         new Paragraph({
           bullet: { level: 0 },
           spacing: { after: 40 },
-          children: [new TextRun({ text: bullet })],
+          children: [new TextRun({ font: 'Calibri',  text: bullet })],
         })
     ),
   ];
@@ -384,7 +479,7 @@ function buildJobTable(job: JobEntry): Table {
           new TableCell({
             width: { size: 1800, type: WidthType.DXA },
             borders: BORDERLESS_CELL_BORDERS,
-            children: [new Paragraph({ children: [new TextRun({ text: job.dateRange, bold: true })] })],
+            children: [new Paragraph({ children: [new TextRun({ font: 'Calibri',  text: job.dateRange, bold: true })] })],
           }),
           new TableCell({
             width: { size: 7560, type: WidthType.DXA },
@@ -414,14 +509,14 @@ function buildReferencesTable(): Table {
             borders: BORDERLESS_CELL_BORDERS,
             children: [
               new Paragraph({
-                children: [new TextRun({ text: 'REFERENCES', bold: true, underline: { type: UnderlineType.SINGLE } })],
+                children: [new TextRun({ font: 'Calibri',  text: 'REFERENCES', bold: true, underline: { type: UnderlineType.SINGLE } })],
               }),
             ],
           }),
           new TableCell({
             width: { size: 7560, type: WidthType.DXA },
             borders: BORDERLESS_CELL_BORDERS,
-            children: [new Paragraph({ children: [new TextRun({ text: 'Available upon request', italics: true })] })],
+            children: [new Paragraph({ children: [new TextRun({ font: 'Calibri',  text: 'Available upon request', italics: true })] })],
           }),
         ],
       }),
@@ -436,19 +531,19 @@ function buildFooter(): Footer {
         border: { top: { style: BorderStyle.SINGLE, size: 4, color: '000000' } },
         spacing: { before: 100 },
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: 'Benchmark Engineering Inc', size: 16 })],
+        children: [new TextRun({ font: 'Calibri',  text: 'Benchmark Engineering Inc', size: 16 })],
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: 'Suite 810, 396 - 11th Ave S.W. Calgary, AB T2R 0C5', size: 16 })],
+        children: [new TextRun({ font: 'Calibri',  text: 'Suite 810, 396 - 11th Ave S.W. Calgary, AB T2R 0C5', size: 16 })],
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: 'Phone (403) 266-5757  Fax (403) 266-5730', size: 16 })],
+        children: [new TextRun({ font: 'Calibri',  text: 'Phone (403) 266-5757  Fax (403) 266-5730', size: 16 })],
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: 'Contact: Nels Eckland (403) 605-2684', size: 16 })],
+        children: [new TextRun({ font: 'Calibri',  text: 'Contact: Nels Eckland (403) 605-2684', size: 16 })],
       }),
     ],
   });
@@ -465,7 +560,7 @@ export function buildResumeDocument(
   const summaryParagraph = new Paragraph({
     spacing: { after: 200 },
     alignment: AlignmentType.JUSTIFIED,
-    children: [new TextRun({ text: structured.summary })],
+    children: [new TextRun({ font: 'Calibri',  text: structured.summary })],
   });
 
   const experienceHeading = sectionHeading('EXPERIENCE');
@@ -483,10 +578,10 @@ export function buildResumeDocument(
             new Paragraph({
               bullet: { level: 0 },
               spacing: { after: 60 },
-              children: [new TextRun({ text: label })],
+              children: [new TextRun({ font: 'Calibri',  text: label })],
             })
         )
-      : [new Paragraph({ children: [new TextRun({ text: 'None on file yet', italics: true })] })];
+      : [new Paragraph({ children: [new TextRun({ font: 'Calibri',  text: 'None on file yet', italics: true })] })];
 
   return new Document({
     sections: [
