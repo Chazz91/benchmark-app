@@ -630,6 +630,101 @@ function BackfillResumePdfSection() {
   );
 }
 
+function ResyncResumeFormatSection() {
+  const [running, setRunning] = useState(false);
+  const [progressNote, setProgressNote] = useState('');
+  const [results, setResults] = useState<{ name: string; status: string; message: string }[] | null>(null);
+  const [summary, setSummary] = useState<{ checkedCount: number; updatedCount: number } | null>(null);
+
+  async function handleRun() {
+    setRunning(true);
+    setResults([]);
+    setSummary(null);
+
+    const listRes = await fetch('/api/admin/resumes/resync-format');
+    const listData = await listRes.json();
+    if (!listRes.ok) {
+      alert(listData.error || 'Failed to list consultants to regenerate');
+      setRunning(false);
+      return;
+    }
+
+    const items: { id: string; name: string }[] = listData.items;
+    let updatedCount = 0;
+
+    // One consultant, one request, one at a time - same reasoning as the PDF backfill above.
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      setProgressNote(`Regenerating resume ${i + 1} of ${items.length}: "${item.name}"…`);
+
+      try {
+        const res = await fetch('/api/admin/resumes/resync-format/single', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ consultantId: item.id }),
+        });
+        const data = await res.json();
+        if (data.status === 'updated') updatedCount++;
+        setResults((prev) => [...(prev || []), data]);
+      } catch (err) {
+        setResults((prev) => [
+          ...(prev || []),
+          { name: item.name, status: 'error', message: `Request failed: ${(err as Error).message}` },
+        ]);
+      }
+    }
+
+    setSummary({ checkedCount: items.length, updatedCount });
+    setProgressNote('');
+    setRunning(false);
+  }
+
+  return (
+    <div className="rounded-2xl border border-gold-400/50 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-brand-900">Regenerate All Benchmark Resumes</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Rebuilds every consultant&apos;s "Benchmark Format" resume from scratch using the
+        current template (font, default title, core tickets, layout), replacing whatever
+        Benchmark-format resume(s) they already have. Use this after a formatting change, not
+        just for resumes that were never converted to PDF - unlike the PDF backfill above, this
+        regenerates everyone who has a Benchmark resume on file, even if it's already a PDF.
+      </p>
+
+      <button
+        onClick={handleRun}
+        disabled={running}
+        className="mt-3 rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
+      >
+        {running ? 'Regenerating resumes…' : 'Regenerate All'}
+      </button>
+
+      {progressNote && <p className="mt-3 text-sm text-slate-500">{progressNote}</p>}
+
+      {summary && (
+        <p className="mt-3 text-sm text-green-700">
+          Checked {summary.checkedCount} consultant(s), updated {summary.updatedCount}.
+        </p>
+      )}
+
+      {results && results.length > 0 && (
+        <ul className="mt-3 max-h-64 space-y-1 overflow-y-auto text-sm">
+          {results.map((r, i) => (
+            <li key={i} className={r.status === 'error' ? 'text-red-700' : 'text-slate-700'}>
+              <span className="font-medium">{r.name}</span>: {r.message}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-3 text-xs text-slate-400">
+        Since every resume is now processed one at a time, a large batch will take a bit
+        longer overall, but each individual step stays fast and reliable - watch the progress
+        line above to see exactly what it's working on.
+      </p>
+    </div>
+  );
+}
+
 export default function ImportPage() {
   return (
     <div>
@@ -641,6 +736,7 @@ export default function ImportPage() {
           <ResumeImportSection />
           <BackfillDisciplineSection />
           <BackfillResumePdfSection />
+          <ResyncResumeFormatSection />
 
           <div>
             <p className="mb-3 text-sm text-slate-500">
