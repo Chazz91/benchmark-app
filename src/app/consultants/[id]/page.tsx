@@ -114,6 +114,12 @@ export default function ConsultantDetailPage() {
   const [editNoExpiry, setEditNoExpiry] = useState(false);
   const [savingTicket, setSavingTicket] = useState(false);
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null);
+  const [allTicketTypes, setAllTicketTypes] = useState<{ id: string; label: string; hasExpiry: boolean }[]>([]);
+  const [newTicketTypeId, setNewTicketTypeId] = useState('');
+  const [newIssueDate, setNewIssueDate] = useState('');
+  const [newExpiryDate, setNewExpiryDate] = useState('');
+  const [newNoExpiry, setNewNoExpiry] = useState(false);
+  const [addingTicket, setAddingTicket] = useState(false);
 
   const load = useCallback(() => {
     fetch(`/api/consultants/${id}`)
@@ -124,6 +130,12 @@ export default function ConsultantDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    fetch('/api/admin/ticket-types')
+      .then((r) => r.json())
+      .then((d) => setAllTicketTypes(d.ticketTypes || []));
+  }, []);
 
   async function handleStatusChange(newStatus: string) {
     setStatusSaving(true);
@@ -426,6 +438,41 @@ export default function ConsultantDetailPage() {
       return;
     }
     setEditingTicketId(null);
+    load();
+  }
+
+  function onSelectNewTicketType(ticketTypeId: string) {
+    setNewTicketTypeId(ticketTypeId);
+    const type = allTicketTypes.find((t) => t.id === ticketTypeId);
+    setNewNoExpiry(type ? !type.hasExpiry : false);
+  }
+
+  async function handleAddTicket() {
+    if (!newTicketTypeId || !newIssueDate || (!newNoExpiry && !newExpiryDate)) {
+      alert('Please select a ticket type, issue date, and expiry date (or mark it as no-expiry).');
+      return;
+    }
+    setAddingTicket(true);
+    const res = await fetch(`/api/consultants/${id}/tickets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticketTypeId: newTicketTypeId,
+        issueDate: newIssueDate,
+        expiryDate: newNoExpiry ? null : newExpiryDate,
+        noExpiry: newNoExpiry,
+      }),
+    });
+    setAddingTicket(false);
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || 'Failed to add ticket');
+      return;
+    }
+    setNewTicketTypeId('');
+    setNewIssueDate('');
+    setNewExpiryDate('');
+    setNewNoExpiry(false);
     load();
   }
 
@@ -856,6 +903,62 @@ export default function ConsultantDetailPage() {
               </ul>
             )}
           </FileDropzone>
+
+          <div className="mb-4 rounded-lg border border-slate-200 p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Or add one manually
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <select
+                value={newTicketTypeId}
+                onChange={(e) => onSelectNewTicketType(e.target.value)}
+                className="rounded-md border border-slate-300 px-2 py-1.5 text-sm sm:col-span-3"
+              >
+                <option value="">Select a ticket type…</option>
+                {allTicketTypes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Issue Date</label>
+                <input
+                  type="date"
+                  value={newIssueDate}
+                  onChange={(e) => setNewIssueDate(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Expiry Date</label>
+                <input
+                  type="date"
+                  value={newExpiryDate}
+                  onChange={(e) => setNewExpiryDate(e.target.value)}
+                  disabled={newNoExpiry}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={handleAddTicket}
+                  disabled={addingTicket}
+                  className="w-full rounded-lg bg-brand-800 px-3 py-1.5 text-sm font-bold text-white hover:bg-brand-900 disabled:opacity-50"
+                >
+                  {addingTicket ? 'Adding…' : 'Add Ticket'}
+                </button>
+              </div>
+            </div>
+            <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={newNoExpiry}
+                onChange={(e) => setNewNoExpiry(e.target.checked)}
+              />
+              This ticket doesn&apos;t expire
+            </label>
+          </div>
 
           {consultant.tickets.length === 0 ? (
             <p className="text-sm text-slate-400">No tickets on file yet.</p>
