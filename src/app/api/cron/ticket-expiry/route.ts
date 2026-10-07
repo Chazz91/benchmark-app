@@ -37,9 +37,15 @@ export async function GET(request: Request) {
   let skipped60 = 0;
   let skipped30 = 0;
 
-  // First window: within 60 days, no 60-day notice sent yet
+  // First window: within 60 days, no 60-day notice sent yet. Office-based consultants (mostly
+  // Superintendents who aren't out in the field) are excluded - their tickets aren't mandatory
+  // the way a Wellsite Supervisor's are, so they don't get chased by this cron at all.
   const sixtyDayTickets = await prisma.ticket.findMany({
-    where: { expiryDate: { lte: sixtyDaysFromNow }, expiryNoticeSentAt: null },
+    where: {
+      expiryDate: { lte: sixtyDaysFromNow },
+      expiryNoticeSentAt: null,
+      consultant: { officeBased: false },
+    },
     include: { consultant: true, ticketType: true },
   });
 
@@ -64,9 +70,14 @@ export async function GET(request: Request) {
     }
   }
 
-  // Second window: within 30 days, no 30-day notice sent yet (separate from the 60-day tracking)
+  // Second window: within 30 days, no 30-day notice sent yet (separate from the 60-day tracking).
+  // Same office-based exclusion as above.
   const thirtyDayTickets = await prisma.ticket.findMany({
-    where: { expiryDate: { lte: thirtyDaysFromNow }, expiryNotice30SentAt: null },
+    where: {
+      expiryDate: { lte: thirtyDaysFromNow },
+      expiryNotice30SentAt: null,
+      consultant: { officeBased: false },
+    },
     include: { consultant: true, ticketType: true },
   });
 

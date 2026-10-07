@@ -34,7 +34,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   }
 
   const onFileTicketLabels = consultant.tickets.map((t) => t.ticketType.label);
-  const ticketLabels = resolveResumeTickets(consultant.discipline, onFileTicketLabels);
+  const ticketLabels = resolveResumeTickets(consultant.discipline, onFileTicketLabels, consultant.officeBased);
 
   try {
     const name = `${consultant.firstName} ${consultant.lastName}`;
@@ -42,7 +42,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       sourceResume.rawText,
       ticketLabels,
       name,
-      resolveResumeTitle(consultant.discipline, consultant.title)
+      resolveResumeTitle(consultant.discipline, consultant.title, consultant.officeBased)
     );
 
     const baseName = `${name} - Benchmark Resume`;

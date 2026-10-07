@@ -49,6 +49,8 @@ function daysUntil(dateStr: string) {
 export default function MyTicketsPage() {
   const [requiredTypes, setRequiredTypes] = useState<TicketType[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [officeBased, setOfficeBased] = useState(false);
+  const [addTicketTypeId, setAddTicketTypeId] = useState('');
   const [editingTypeId, setEditingTypeId] = useState<string | null>(null);
   const [issueDate, setIssueDate] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
@@ -70,6 +72,7 @@ export default function MyTicketsPage() {
       .then((d) => {
         setRequiredTypes(d.requiredTypes || []);
         setTickets(d.tickets || []);
+        setOfficeBased(!!d.consultant?.officeBased);
       });
   }, []);
 
@@ -192,7 +195,14 @@ export default function MyTicketsPage() {
   return (
     <div>
       <NavBar />
-      <PageHeader title="My Tickets" subtitle="Keep your certifications up to date. You'll get an email reminder when one is within 60 days of expiring." />
+      <PageHeader
+        title="My Tickets"
+        subtitle={
+          officeBased
+            ? 'Add any certifications you have on file below — there\'s no required list for office-based staff.'
+            : "Keep your certifications up to date. You'll get an email reminder when one is within 60 days of expiring."
+        }
+      />
       <main className="mx-auto max-w-3xl px-6 py-8">
 
         {/* Scan a photo section */}
@@ -330,8 +340,41 @@ export default function MyTicketsPage() {
           )}
         </div>
 
+        {officeBased && (
+          <div className="mb-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4">
+            <p className="mb-2 text-sm font-medium text-slate-700">Add a ticket</p>
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={addTicketTypeId}
+                onChange={(e) => setAddTicketTypeId(e.target.value)}
+                className="flex-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">Select a certification…</option>
+                {requiredTypes
+                  .filter((t) => !ticketFor(t.id))
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+              </select>
+              <button
+                onClick={() => {
+                  if (!addTicketTypeId) return;
+                  startEditing(addTicketTypeId);
+                  setAddTicketTypeId('');
+                }}
+                disabled={!addTicketTypeId}
+                className="rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-3">
-          {requiredTypes.map((type) => {
+          {(officeBased ? requiredTypes.filter((t) => ticketFor(t.id) || t.id === editingTypeId) : requiredTypes).map((type) => {
             const ticket = ticketFor(type.id);
             const days = ticket && ticket.expiryDate ? daysUntil(ticket.expiryDate) : null;
             const isEditing = editingTypeId === type.id;
@@ -448,6 +491,11 @@ export default function MyTicketsPage() {
           {requiredTypes.length === 0 && (
             <p className="text-sm text-slate-500">No ticket types have been set up yet.</p>
           )}
+          {officeBased &&
+            requiredTypes.length > 0 &&
+            requiredTypes.filter((t) => ticketFor(t.id) || t.id === editingTypeId).length === 0 && (
+              <p className="text-sm text-slate-500">No tickets on file yet — add one above if you have any.</p>
+            )}
         </div>
       </main>
     </div>

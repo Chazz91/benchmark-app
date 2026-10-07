@@ -163,6 +163,11 @@ model Consultant {
   hasCanadianPassport Boolean       @default(false)
   hasUSPassport    Boolean          @default(false)
   discipline       Discipline       @default(ALL)
+  // Admin-set: mostly-office staff (e.g. Superintendents who occasionally go to site) whose
+  // tickets aren't mandatory the way a field Wellsite Supervisor's are. Set true to skip the
+  // "required tickets" checklist on their own My Tickets page and the automated expiry-reminder
+  // emails, while still letting them add whatever tickets they do have via a plain dropdown.
+  officeBased      Boolean          @default(false)
   yearsExperience  Int?
   location         String?
   status           ConsultantStatus @default(ACTIVE)

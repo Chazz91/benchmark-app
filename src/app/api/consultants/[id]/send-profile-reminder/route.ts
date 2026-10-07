@@ -32,16 +32,20 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   // Compare against the same required-tickets list shown on their own My Tickets page -
   // this correctly covers driver's license too, since it's just one of the required types,
-  // rather than needing a separate special-case check for it.
-  const requiredTypes = await prisma.ticketType.findMany({
-    where: { OR: [{ discipline: consultant.discipline }, { discipline: 'ALL' }] },
-  });
-  const heldTicketTypeIds = new Set(consultant.tickets.map((t) => t.ticketTypeId));
-  const missingTicketLabels = requiredTypes
-    .filter((rt) => !heldTicketTypeIds.has(rt.id))
-    .map((rt) => rt.label);
+  // rather than needing a separate special-case check for it. Office-based consultants don't
+  // have a "required" ticket list at all (see My Tickets), so they're never nagged about ones
+  // they're missing.
+  if (!consultant.officeBased) {
+    const requiredTypes = await prisma.ticketType.findMany({
+      where: { OR: [{ discipline: consultant.discipline }, { discipline: 'ALL' }] },
+    });
+    const heldTicketTypeIds = new Set(consultant.tickets.map((t) => t.ticketTypeId));
+    const missingTicketLabels = requiredTypes
+      .filter((rt) => !heldTicketTypeIds.has(rt.id))
+      .map((rt) => rt.label);
 
-  missingItems.push(...missingTicketLabels);
+    missingItems.push(...missingTicketLabels);
+  }
 
   if (missingItems.length === 0) {
     return NextResponse.json({ error: 'Nothing appears to be missing from their profile' }, { status: 400 });
