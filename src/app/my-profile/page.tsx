@@ -41,6 +41,7 @@ interface ConsultantProfile {
   emergencyContactPhone: string | null;
   workingStatus: 'AVAILABLE' | 'WORKING';
   currentClientId: string | null;
+  currentRig: string | null;
   resumes: ResumeEntry[];
   evaluations: EvaluationEntry[];
   serviceOrderSheetFileName: string | null;
@@ -54,6 +55,7 @@ export default function MyProfilePage() {
 
   const [workingStatus, setWorkingStatus] = useState<'AVAILABLE' | 'WORKING'>('AVAILABLE');
   const [currentClientId, setCurrentClientId] = useState('');
+  const [currentRig, setCurrentRig] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [location, setLocation] = useState('');
@@ -80,6 +82,7 @@ export default function MyProfilePage() {
         setClients(d.clients || []);
         setWorkingStatus(c?.workingStatus || 'AVAILABLE');
         setCurrentClientId(c?.currentClientId || '');
+        setCurrentRig(c?.currentRig || '');
         setPhone(c?.phone || '');
         setEmail(c?.email || '');
         setLocation(c?.location || '');
@@ -102,6 +105,7 @@ export default function MyProfilePage() {
       body: JSON.stringify({
         workingStatus,
         currentClientId: currentClientId || null,
+        currentRig: currentRig || null,
         phone,
         email,
         location,
@@ -222,6 +226,16 @@ export default function MyProfilePage() {
                   </option>
                 ))}
               </select>
+
+              <label className="mb-1 mt-3 block text-sm font-medium text-slate-700">
+                Which rig are you on?
+              </label>
+              <input
+                value={currentRig}
+                onChange={(e) => setCurrentRig(e.target.value)}
+                placeholder="e.g. Rig 42"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
             </div>
           )}
         </div>

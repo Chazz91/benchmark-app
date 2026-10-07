@@ -20,6 +20,7 @@ interface ConsultantDetail {
   status: string;
   workingStatus: string;
   currentClient: { name: string } | null;
+  currentRig: string | null;
   location: string | null;
   yearsExperience: number | null;
   summary: string | null;
@@ -538,6 +539,7 @@ export default function ConsultantDetailPage() {
             {consultant.workingStatus === 'WORKING' && (
               <span className="rounded-full bg-blue-500/20 px-3 py-1 text-sm font-medium text-blue-100">
                 Working{consultant.currentClient ? ` — ${consultant.currentClient.name}` : ''}
+                {consultant.currentRig ? ` (${consultant.currentRig})` : ''}
               </span>
             )}
             {consultant.workingStatus === 'AVAILABLE' && (

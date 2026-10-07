@@ -23,6 +23,7 @@ interface Consultant {
   discipline: string;
   workingStatus: string;
   currentClient: { name: string } | null;
+  currentRig: string | null;
   location: string | null;
   yearsExperience: number | null;
   email: string | null;
@@ -358,7 +359,7 @@ export default function ConsultantsPage() {
                           )}
                         >
                           {c.workingStatus === 'WORKING'
-                            ? `Working${c.currentClient ? ` · ${c.currentClient.name}` : ''}`
+                            ? `Working${c.currentClient ? ` · ${c.currentClient.name}` : ''}${c.currentRig ? ` (${c.currentRig})` : ''}`
                             : 'Available'}
                         </span>
                         <span

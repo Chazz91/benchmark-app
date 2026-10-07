@@ -202,6 +202,9 @@ model Consultant {
   // the company this consultant is currently working for, if any (self-selected or set by staff)
   currentClient    ClientCompany?   @relation(fields: [currentClientId], references: [id])
   currentClientId  String?
+  // free-text, e.g. "Rig 42" - only meaningful while workingStatus is WORKING, cleared when
+  // they go back to Available (self-reported, like currentClientId)
+  currentRig       String?
 
   keywords         ConsultantKeyword[]
   resumes          Resume[]
