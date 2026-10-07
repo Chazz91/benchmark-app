@@ -7,6 +7,7 @@ import { sendProfileUpdatedAlertEmail } from '@/lib/email';
 const FIELD_LABELS: Record<string, string> = {
   workingStatus: 'Working Status',
   currentClientId: 'Current Client',
+  currentRig: 'Current Rig',
   phone: 'Phone',
   email: 'Email',
   location: 'Location',
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
   const {
     workingStatus,
     currentClientId,
+    currentRig,
     phone,
     email,
     location,
@@ -86,8 +88,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid workingStatus' }, { status: 400 });
     }
     data.workingStatus = workingStatus;
-    // clear the client if going back to Available; otherwise use whatever was selected
+    // clear the client/rig if going back to Available; otherwise use whatever was entered
     data.currentClientId = workingStatus === 'AVAILABLE' ? null : currentClientId || null;
+    data.currentRig = workingStatus === 'AVAILABLE' ? null : currentRig || null;
   }
 
   if (phone !== undefined) data.phone = phone || null;
@@ -103,7 +106,7 @@ export async function POST(request: Request) {
   });
 
   const changedFieldLabels = Object.keys(data)
-    .filter((key) => key !== 'currentClientId') // just a side effect of workingStatus, not its own field
+    .filter((key) => key !== 'currentClientId' && key !== 'currentRig') // side effects of workingStatus, not their own fields
     .map((key) => FIELD_LABELS[key])
     .filter(Boolean);
 
