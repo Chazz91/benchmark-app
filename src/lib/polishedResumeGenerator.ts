@@ -209,7 +209,7 @@ export function buildResumePdf(
       });
 
     // Thick divider bar under the header, matching the template's bold horizontal rule
-    const dividerY = headerTop + 50;
+    const dividerY = headerTop + 42;
     doc
       .moveTo(left, dividerY)
       .lineTo(doc.page.width - doc.page.margins.right, dividerY)
