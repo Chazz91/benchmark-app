@@ -111,6 +111,51 @@ export function resolveResumeTitle(discipline: string, title: string | null | un
   return title || '';
 }
 
+// Core tickets always shown on a Drilling/Completions resume, regardless of what's actually
+// on file for that specific consultant - these are the baseline certifications every field
+// consultant in that discipline is expected to carry.
+const CORE_TICKETS_BY_DISCIPLINE: Record<string, string[]> = {
+  DRILLING: ['Second Line', 'IRP 7/Safety Management', 'H2S', 'First Aid', 'WHMIS', 'TDG', 'CSO', "Driver's Licence"],
+  COMPLETIONS: [
+    'Well Service BOP',
+    'IRP 7/Safety Management',
+    'H2S',
+    'First Aid',
+    'WHMIS',
+    'TDG',
+    'CSO',
+    "Driver's Licence",
+  ],
+};
+
+// Beyond the Completions core list, these only show up if the consultant actually has them
+// on file - unlike the core list, they're not assumed to apply to everyone in the discipline.
+const ADDITIONAL_COMPLETIONS_TICKETS = [
+  'Coiled Tubing BOP',
+  'Confined Space',
+  'Fall Protection',
+  'Ground Disturbance',
+  'ICS-100',
+  'NORM',
+  'Wildlife Awareness',
+];
+
+export function resolveResumeTickets(discipline: string, onFileLabels: string[]): string[] {
+  const coreTickets = CORE_TICKETS_BY_DISCIPLINE[discipline];
+  if (!coreTickets) return onFileLabels;
+
+  const onFileSet = new Set(onFileLabels.map((label) => label.trim().toLowerCase()));
+  const tickets = [...coreTickets];
+
+  if (discipline === 'COMPLETIONS') {
+    for (const extra of ADDITIONAL_COMPLETIONS_TICKETS) {
+      if (onFileSet.has(extra.toLowerCase())) tickets.push(extra);
+    }
+  }
+
+  return tickets;
+}
+
 const PDF_NAVY = '#1F4E79';
 const PDF_ACCENT_BLUE = '#4472C4';
 // Matches the original Word template's page setup (0.5in top, 0.625in sides, 0.75in bottom)

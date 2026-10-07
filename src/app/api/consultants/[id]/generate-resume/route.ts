@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { uploadResumeFile } from '@/lib/storage';
-import { generatePolishedResume, resolveResumeTitle } from '@/lib/polishedResumeGenerator';
+import { generatePolishedResume, resolveResumeTitle, resolveResumeTickets } from '@/lib/polishedResumeGenerator';
 
 // POST - generates a polished, Benchmark-branded Word resume from the consultant's most
 // recent original resume on file, plus their actual on-file tickets (which naturally
@@ -33,7 +33,8 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     );
   }
 
-  const ticketLabels = consultant.tickets.map((t) => t.ticketType.label);
+  const onFileTicketLabels = consultant.tickets.map((t) => t.ticketType.label);
+  const ticketLabels = resolveResumeTickets(consultant.discipline, onFileTicketLabels);
 
   try {
     const name = `${consultant.firstName} ${consultant.lastName}`;
