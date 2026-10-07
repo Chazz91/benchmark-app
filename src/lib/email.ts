@@ -48,9 +48,20 @@ export async function sendConsultantProfileInviteEmail(to: string, firstName: st
     subject: 'Set up your Benchmark Engineering Connect profile',
     html: `
       <p>Hi ${firstName},</p>
-      <p>You're on file with Benchmark Engineering — click the link below to set a password and access your profile, where you can keep your tickets and resume up to date:</p>
+      <p>You're already on file with Benchmark Engineering, and we've set up a profile for you in
+      Benchmark Connect — a simple online portal where you can manage your own information
+      instead of calling or emailing our office every time something changes.</p>
+      <p>Once you're set up, you can:</p>
+      <ul>
+        <li>Mark yourself Available or Working, and note which rig you're on</li>
+        <li>Upload or update your resume any time — the same one we send out to clients</li>
+        <li>Keep your tickets and certifications current, including snapping a photo of a new
+        one to add it in seconds</li>
+        <li>See at a glance when a certification is coming up for renewal, before it lapses</li>
+      </ul>
+      <p>It takes about a minute to set a password and take a look:</p>
       <p><a href="${link}">${link}</a></p>
-      <p>This link expires in 7 days.</p>
+      <p>This link expires in 7 days — just let us know if you need a new one.</p>
     `,
   });
 }
