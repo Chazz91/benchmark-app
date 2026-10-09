@@ -45,11 +45,11 @@ export async function sendConsultantProfileInviteEmail(to: string, firstName: st
   await send({
     from: FROM,
     to,
-    subject: 'Set up your Benchmark Engineering Connect profile',
+    subject: 'Set up your Benchmark Portal profile',
     html: `
       <p>Hi ${firstName},</p>
       <p>You're already on file with Benchmark Engineering, and we've set up a profile for you in
-      Benchmark Connect — a simple online portal where you can manage your own information
+      the Benchmark Portal — a simple online portal where you can manage your own information
       instead of calling or emailing our office every time something changes.</p>
       <p>Once you're set up, you can:</p>
       <ul>
