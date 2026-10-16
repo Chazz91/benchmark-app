@@ -1244,13 +1244,21 @@ export default function ConsultantDetailPage() {
                   )}{' '}
                   — {new Date(r.createdAt).toLocaleDateString()}
                 </span>
-                <button
-                  onClick={() => handleDeleteResume(r.id)}
-                  disabled={deletingResumeId === r.id}
-                  className="ml-2 text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
-                >
-                  {deletingResumeId === r.id ? 'Deleting…' : 'Delete'}
-                </button>
+                <span className="flex shrink-0 items-center gap-3">
+                  <a
+                    href={`/api/resumes/${r.id}/view?download=1`}
+                    className="text-xs font-medium text-brand-700 hover:underline"
+                  >
+                    Save
+                  </a>
+                  <button
+                    onClick={() => handleDeleteResume(r.id)}
+                    disabled={deletingResumeId === r.id}
+                    className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    {deletingResumeId === r.id ? 'Deleting…' : 'Delete'}
+                  </button>
+                </span>
               </li>
             ))}
             {consultant.resumes.length === 0 && <li className="text-slate-400">No resumes uploaded yet.</li>}

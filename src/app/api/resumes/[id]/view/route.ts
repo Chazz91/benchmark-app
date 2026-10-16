@@ -4,9 +4,10 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getResumeSignedUrl } from '@/lib/storage';
 
-// GET - redirects to a short-lived signed URL for viewing this resume.
+// GET - redirects to a short-lived signed URL for viewing this resume. Pass ?download=1 to
+// force it to save to disk instead (used by the "Save" link), regardless of file type.
 // Accessible to internal staff (admin/recruiter/viewer), or the consultant who owns it.
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -27,6 +28,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const signedUrl = await getResumeSignedUrl(resume.fileUrl, resume.fileName);
+  const forceDownload = new URL(req.url).searchParams.get('download') === '1';
+  const signedUrl = await getResumeSignedUrl(resume.fileUrl, resume.fileName, forceDownload);
   return NextResponse.redirect(signedUrl);
 }
