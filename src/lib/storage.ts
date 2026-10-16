@@ -33,10 +33,13 @@ export async function uploadResumeFile(
 // render fine inline everywhere, so those keep the normal in-browser preview.
 const INLINE_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp']);
 
-export async function getResumeSignedUrl(key: string, fileName?: string): Promise<string> {
+// forceDownload overrides the usual inline-for-viewable-types behavior - used by the "Save"
+// link next to each resume so staff can save a copy straight to disk (e.g. for their shared
+// drive) instead of it just opening in a browser tab, which is all a plain PDF link does.
+export async function getResumeSignedUrl(key: string, fileName?: string, forceDownload = false): Promise<string> {
   const name = fileName || key.split('/').pop() || 'file';
   const extension = name.split('.').pop()?.toLowerCase() || '';
-  const disposition = INLINE_EXTENSIONS.has(extension) ? 'inline' : 'attachment';
+  const disposition = !forceDownload && INLINE_EXTENSIONS.has(extension) ? 'inline' : 'attachment';
   // Strip characters that would break the quoted-string header value.
   const safeName = name.replace(/["\r\n]/g, '');
 
