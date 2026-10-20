@@ -50,7 +50,7 @@ export async function sendConsultantProfileInviteEmail(to: string, firstName: st
       <p>Hi ${firstName},</p>
       <p>You're already on file with Benchmark Engineering, and we've set up a profile for you in
       the Benchmark Portal — a simple online portal where you can manage your own information
-      instead of calling or emailing our office every time something changes.</p>
+      any time it's convenient for you.</p>
       <p>Once you're set up, you can:</p>
       <ul>
         <li>Mark yourself Available or Working, and note which rig you're on</li>
