@@ -122,6 +122,7 @@ export default function ConsultantDetailPage() {
   const [newIssueDate, setNewIssueDate] = useState('');
   const [newExpiryDate, setNewExpiryDate] = useState('');
   const [newNoExpiry, setNewNoExpiry] = useState(false);
+  const [newTicketFile, setNewTicketFile] = useState<File | null>(null);
   const [addingTicket, setAddingTicket] = useState(false);
 
   const load = useCallback(() => {
@@ -458,16 +459,14 @@ export default function ConsultantDetailPage() {
       return;
     }
     setAddingTicket(true);
-    const res = await fetch(`/api/consultants/${id}/tickets`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ticketTypeId: newTicketTypeId,
-        issueDate: newIssueDate,
-        expiryDate: newNoExpiry ? null : newExpiryDate,
-        noExpiry: newNoExpiry,
-      }),
-    });
+    const formData = new FormData();
+    formData.append('ticketTypeId', newTicketTypeId);
+    formData.append('issueDate', newIssueDate);
+    formData.append('noExpiry', newNoExpiry ? 'true' : 'false');
+    if (!newNoExpiry) formData.append('expiryDate', newExpiryDate);
+    if (newTicketFile) formData.append('file', newTicketFile);
+
+    const res = await fetch(`/api/consultants/${id}/tickets`, { method: 'POST', body: formData });
     setAddingTicket(false);
     if (!res.ok) {
       const data = await res.json();
@@ -478,6 +477,7 @@ export default function ConsultantDetailPage() {
     setNewIssueDate('');
     setNewExpiryDate('');
     setNewNoExpiry(false);
+    setNewTicketFile(null);
     load();
   }
 
@@ -979,6 +979,14 @@ export default function ConsultantDetailPage() {
               />
               This ticket doesn&apos;t expire
             </label>
+            <div className="mt-2">
+              <label className="mb-1 block text-xs text-slate-400">Document (optional) — e.g. a WCB letter</label>
+              <input
+                type="file"
+                onChange={(e) => setNewTicketFile(e.target.files?.[0] || null)}
+                className="text-sm"
+              />
+            </div>
           </div>
 
           {consultant.tickets.length === 0 ? (
