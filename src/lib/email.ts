@@ -62,6 +62,9 @@ export async function sendConsultantProfileInviteEmail(to: string, firstName: st
       <p>It takes about a minute to set a password and take a look:</p>
       <p><a href="${link}">${link}</a></p>
       <p>This link expires in 7 days — just let us know if you need a new one.</p>
+      <p>This is a new tool we're still rolling out, so please bear with us as we get it fully
+      launched and ironed out. If you run into any questions or issues, reach out to Chase
+      directly at (403) 373-0344 or chase@benchmarkeng.ca.</p>
     `,
   });
 }
