@@ -221,6 +221,64 @@ export async function sendBulkTicketUploadAlertEmail(
   });
 }
 
+const SCORE_LABELS = ['', 'Poor', 'Below Average', 'Average', 'Good', 'Excellent'];
+
+function scoreRow(category: string, score: number, comments?: string | null) {
+  return `
+    <p style="margin-bottom:4px;"><strong>${category}:</strong> ${score}/5 (${SCORE_LABELS[score] || score})</p>
+    ${comments ? `<p style="margin:0 0 12px 16px; color:#475569;">"${comments}"</p>` : ''}
+  `;
+}
+
+// Sent to admins as soon as a client submits a public evaluation link, so the full results
+// land in an inbox immediately instead of only being visible by logging in and checking.
+export async function sendEvaluationSubmittedAlertEmail(
+  adminEmails: string[],
+  consultantName: string,
+  consultantId: string,
+  evaluationId: string,
+  evaluation: {
+    evaluatorName: string | null;
+    evaluatorCompany?: string | null;
+    safetyScore: number;
+    safetyComments?: string | null;
+    knowledgeScore: number;
+    knowledgeComments?: string | null;
+    reportingScore: number;
+    reportingComments?: string | null;
+    professionalismScore: number;
+    professionalismComments?: string | null;
+    overallScore: number;
+    overallComments?: string | null;
+    wouldRecommend?: boolean | null;
+  }
+) {
+  if (adminEmails.length === 0) return;
+
+  await send({
+    from: FROM,
+    to: adminEmails,
+    subject: `New evaluation submitted for ${consultantName}`,
+    html: `
+      <p><strong>${evaluation.evaluatorName || 'Someone'}</strong>${
+        evaluation.evaluatorCompany ? ` (${evaluation.evaluatorCompany})` : ''
+      } just submitted an evaluation for <strong>${consultantName}</strong>:</p>
+      ${scoreRow('Safety', evaluation.safetyScore, evaluation.safetyComments)}
+      ${scoreRow('Knowledge', evaluation.knowledgeScore, evaluation.knowledgeComments)}
+      ${scoreRow('Reporting', evaluation.reportingScore, evaluation.reportingComments)}
+      ${scoreRow('Professionalism', evaluation.professionalismScore, evaluation.professionalismComments)}
+      ${scoreRow('Overall', evaluation.overallScore, evaluation.overallComments)}
+      ${
+        typeof evaluation.wouldRecommend === 'boolean'
+          ? `<p><strong>Would recommend:</strong> ${evaluation.wouldRecommend ? 'Yes' : 'No'}</p>`
+          : ''
+      }
+      <p><a href="${APP_URL}/admin/evaluations/${evaluationId}">View the full evaluation</a> ·
+      <a href="${APP_URL}/consultants/${consultantId}">View ${consultantName}'s profile</a></p>
+    `,
+  });
+}
+
 export async function sendTwoFactorCodeEmail(to: string, firstName: string, code: string) {
   await send({
     from: FROM,
