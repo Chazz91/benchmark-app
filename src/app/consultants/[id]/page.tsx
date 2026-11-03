@@ -15,6 +15,8 @@ interface ConsultantDetail {
   lastName: string;
   email: string | null;
   phone: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
   discipline: string;
   title: string | null;
   officeBased: boolean;
@@ -87,6 +89,8 @@ export default function ConsultantDetailPage() {
   const [editingContact, setEditingContact] = useState(false);
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editEmergencyContactName, setEditEmergencyContactName] = useState('');
+  const [editEmergencyContactPhone, setEditEmergencyContactPhone] = useState('');
   const [editLocation, setEditLocation] = useState('');
   const [editTitle, setEditTitle] = useState('');
   const [editDiscipline, setEditDiscipline] = useState('');
@@ -191,6 +195,8 @@ export default function ConsultantDetailPage() {
     setEditLastName(consultant?.lastName || '');
     setEditEmail(consultant?.email || '');
     setEditPhone(consultant?.phone || '');
+    setEditEmergencyContactName(consultant?.emergencyContactName || '');
+    setEditEmergencyContactPhone(consultant?.emergencyContactPhone || '');
     setEditLocation(consultant?.location || '');
     setEditTitle(consultant?.title || '');
     setEditDiscipline(consultant?.discipline || 'ALL');
@@ -212,6 +218,8 @@ export default function ConsultantDetailPage() {
         lastName: editLastName.trim(),
         email: editEmail || null,
         phone: editPhone || null,
+        emergencyContactName: editEmergencyContactName || null,
+        emergencyContactPhone: editEmergencyContactPhone || null,
         location: editLocation || null,
         title: editTitle || null,
         discipline: editDiscipline,
@@ -716,6 +724,22 @@ export default function ConsultantDetailPage() {
                     className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
                   />
                 </div>
+                <div>
+                  <label className="mb-1 block text-xs text-slate-400">Emergency Contact Name</label>
+                  <input
+                    value={editEmergencyContactName}
+                    onChange={(e) => setEditEmergencyContactName(e.target.value)}
+                    className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-slate-400">Emergency Contact Phone</label>
+                  <input
+                    value={editEmergencyContactPhone}
+                    onChange={(e) => setEditEmergencyContactPhone(e.target.value)}
+                    className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                  />
+                </div>
               </div>
               <label className="flex items-center gap-2 text-xs text-slate-600">
                 <input
@@ -789,6 +813,24 @@ export default function ConsultantDetailPage() {
               <div className="min-w-0">
                 <p className="text-xs text-slate-400">Location</p>
                 <p className="truncate text-slate-700">{consultant.location || 'Not on file'}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-slate-400">Emergency Contact</p>
+                {consultant.emergencyContactName || consultant.emergencyContactPhone ? (
+                  <>
+                    <p className="truncate text-slate-700">{consultant.emergencyContactName || '—'}</p>
+                    {consultant.emergencyContactPhone && (
+                      <a
+                        href={`tel:${consultant.emergencyContactPhone}`}
+                        className="block break-words text-brand-700 hover:underline"
+                      >
+                        {consultant.emergencyContactPhone}
+                      </a>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-slate-400">Not on file</p>
+                )}
               </div>
             </div>
           )}
