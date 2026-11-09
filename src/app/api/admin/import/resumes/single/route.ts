@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { uploadResumeFile } from '@/lib/storage';
 import { extractTextFromFile, parseResumeText } from '@/lib/resumeParser';
 import { resolveOrCreateKeyword } from '@/lib/keywords';
+import { looksLikeBenchmarkFormat } from '@/lib/resumeFormatting';
 
 // POST multipart/form-data with exactly one "file" entry. Same logic as the old bulk
 // /resumes route, just scoped to a single file per request so a large batch can never
@@ -77,7 +78,14 @@ export async function POST(request: Request) {
     const key = `resumes/${consultant.id}/${Date.now()}-${file.name}`;
     const fileUrl = await uploadResumeFile(key, buffer, file.type);
     await prisma.resume.create({
-      data: { consultantId: consultant.id, fileName: file.name, fileUrl, rawText, parsedAt: new Date() },
+      data: {
+        consultantId: consultant.id,
+        fileName: file.name,
+        fileUrl,
+        rawText,
+        parsedAt: new Date(),
+        isFormatted: looksLikeBenchmarkFormat(file.name),
+      },
     });
 
     for (const kw of parsed.keywords) {

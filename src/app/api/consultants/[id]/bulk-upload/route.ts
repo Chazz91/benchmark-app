@@ -7,6 +7,7 @@ import { extractTextFromFile, parseResumeText } from '@/lib/resumeParser';
 import { resolveOrCreateKeyword } from '@/lib/keywords';
 import { parseTicketDocument } from '@/lib/ticketDocumentParser';
 import { resolveTicketType } from '@/lib/resolveTicketType';
+import { looksLikeBenchmarkFormat } from '@/lib/resumeFormatting';
 
 // Loops over every file in the batch, each needing its own Claude call (resume parse or ticket
 // photo read) - give it real headroom instead of risking Vercel's default timeout partway
@@ -94,7 +95,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
       const key = `resumes/${consultant.id}/${Date.now()}-${file.name}`;
       const fileUrl = await uploadResumeFile(key, buffer, file.type);
       await prisma.resume.create({
-        data: { consultantId: consultant.id, fileName: file.name, fileUrl, rawText, parsedAt: new Date() },
+        data: {
+          consultantId: consultant.id,
+          fileName: file.name,
+          fileUrl,
+          rawText,
+          parsedAt: new Date(),
+          isFormatted: looksLikeBenchmarkFormat(file.name),
+        },
       });
 
       for (const kw of parsed.keywords) {

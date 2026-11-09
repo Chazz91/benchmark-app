@@ -725,6 +725,67 @@ function ResyncResumeFormatSection() {
   );
 }
 
+function FixBenchmarkFlagSection() {
+  const [running, setRunning] = useState(false);
+  const [summary, setSummary] = useState<{ checkedCount: number; fixedCount: number } | null>(null);
+  const [fixed, setFixed] = useState<{ name: string; fileName: string }[] | null>(null);
+
+  async function handleRun() {
+    setRunning(true);
+    setSummary(null);
+    setFixed(null);
+
+    const res = await fetch('/api/admin/resumes/fix-benchmark-flag', { method: 'POST' });
+    const data = await res.json();
+    setRunning(false);
+
+    if (!res.ok) {
+      alert(data.error || 'Failed to run fix');
+      return;
+    }
+    setSummary({ checkedCount: data.checkedCount, fixedCount: data.fixedCount });
+    setFixed(data.fixed);
+  }
+
+  return (
+    <div className="rounded-2xl border border-gold-400/50 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-brand-900">Hide Already-Uploaded Benchmark Resumes</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        One-time cleanup for Benchmark-formatted resumes pulled from the shared drive and
+        uploaded by hand (rather than generated in-app), before new uploads started
+        auto-detecting them by name. Finds any resume whose file name contains "Benchmark" that
+        isn&apos;t already marked as a Benchmark Format resume, and marks it - hiding it from
+        the consultant themselves, same as every other Benchmark Format resume. Safe to run
+        more than once.
+      </p>
+
+      <button
+        onClick={handleRun}
+        disabled={running}
+        className="mt-3 rounded-lg bg-gold-500 px-4 py-1.5 text-sm font-bold text-brand-900 hover:bg-gold-600 disabled:opacity-50"
+      >
+        {running ? 'Checking resumes…' : 'Run Fix'}
+      </button>
+
+      {summary && (
+        <p className="mt-3 text-sm text-green-700">
+          Checked {summary.checkedCount} resume(s), fixed {summary.fixedCount}.
+        </p>
+      )}
+
+      {fixed && fixed.length > 0 && (
+        <ul className="mt-3 max-h-64 space-y-1 overflow-y-auto text-sm text-slate-700">
+          {fixed.map((r, i) => (
+            <li key={i}>
+              <span className="font-medium">{r.name}</span>: {r.fileName}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function ImportPage() {
   return (
     <div>
@@ -737,6 +798,7 @@ export default function ImportPage() {
           <BackfillDisciplineSection />
           <BackfillResumePdfSection />
           <ResyncResumeFormatSection />
+          <FixBenchmarkFlagSection />
 
           <div>
             <p className="mb-3 text-sm text-slate-500">
