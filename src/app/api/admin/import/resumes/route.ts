@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { uploadResumeFile } from '@/lib/storage';
 import { extractTextFromFile, parseResumeText } from '@/lib/resumeParser';
 import { resolveOrCreateKeyword } from '@/lib/keywords';
+import { looksLikeBenchmarkFormat } from '@/lib/resumeFormatting';
 
 interface FileResult {
   fileName: string;
@@ -106,6 +107,7 @@ export async function POST(request: Request) {
           fileUrl,
           rawText,
           parsedAt: new Date(),
+          isFormatted: looksLikeBenchmarkFormat(file.name),
         },
       });
 

@@ -7,6 +7,7 @@ import { extractTextFromFile, parseResumeText } from '@/lib/resumeParser';
 import { resolveOrCreateKeyword } from '@/lib/keywords';
 import { parseTicketDocument } from '@/lib/ticketDocumentParser';
 import { resolveTicketType } from '@/lib/resolveTicketType';
+import { looksLikeBenchmarkFormat } from '@/lib/resumeFormatting';
 
 const RESUME_NAME_HINTS = ['resume', 'cv'];
 const IMAGE_OR_PDF = /\.(pdf|jpg|jpeg|png|gif|webp)$/i;
@@ -166,6 +167,7 @@ export async function POST(request: Request) {
             fileUrl: resumeUrl,
             rawText,
             parsedAt: new Date(),
+            isFormatted: looksLikeBenchmarkFormat(resumeEntry.file.name),
           },
         });
       }

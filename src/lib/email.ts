@@ -12,6 +12,11 @@ function getResendClient(): Resend {
 
 const FROM = process.env.EMAIL_FROM || 'Benchmark Engineering Inc. <onboarding@resend.dev>';
 const APP_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+// Comma-separated list of addresses to BCC on every profile invite email, so whoever sends
+// invites gets a copy landing in their own inbox. Unset by default - no BCC until configured.
+const INVITE_BCC = process.env.EMAIL_BCC
+  ? process.env.EMAIL_BCC.split(',').map((e) => e.trim()).filter(Boolean)
+  : undefined;
 
 async function send(params: Parameters<InstanceType<typeof Resend>['emails']['send']>[0]) {
   console.log('send() called, about to call Resend API, to:', params.to);
@@ -45,6 +50,7 @@ export async function sendConsultantProfileInviteEmail(to: string, firstName: st
   await send({
     from: FROM,
     to,
+    bcc: INVITE_BCC,
     subject: 'Set up your Benchmark Portal profile',
     html: `
       <p>Hi ${firstName},</p>

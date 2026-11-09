@@ -6,6 +6,7 @@ import { uploadResumeFile } from '@/lib/storage';
 import { extractTextFromFile, parseResumeText } from '@/lib/resumeParser';
 import { resolveOrCreateKeyword } from '@/lib/keywords';
 import { isExcludedFile } from '@/lib/fileExclusion';
+import { looksLikeBenchmarkFormat } from '@/lib/resumeFormatting';
 
 // POST multipart/form-data: { file, folderName, consultantId? }
 // Processes exactly ONE resume file - kept small and fast (one Claude call) so it never
@@ -85,7 +86,14 @@ export async function POST(request: Request) {
   const resumeKey = `resumes/${consultant.id}/${Date.now()}-${file.name}`;
   const resumeUrl = await uploadResumeFile(resumeKey, buffer, file.type);
   await prisma.resume.create({
-    data: { consultantId: consultant.id, fileName: file.name, fileUrl: resumeUrl, rawText, parsedAt: new Date() },
+    data: {
+      consultantId: consultant.id,
+      fileName: file.name,
+      fileUrl: resumeUrl,
+      rawText,
+      parsedAt: new Date(),
+      isFormatted: looksLikeBenchmarkFormat(file.name),
+    },
   });
 
   for (const kw of parsed.keywords) {

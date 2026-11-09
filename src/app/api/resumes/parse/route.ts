@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { uploadResumeFile } from '@/lib/storage';
 import { extractTextFromFile, parseResumeText } from '@/lib/resumeParser';
 import { resolveOrCreateKeyword } from '@/lib/keywords';
+import { looksLikeBenchmarkFormat } from '@/lib/resumeFormatting';
 
 // POST multipart/form-data: { file, consultantId }
 // 1. Uploads the resume file to S3
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
       fileUrl,
       rawText,
       parsedAt: new Date(),
+      isFormatted: looksLikeBenchmarkFormat(file.name),
     },
   });
 
