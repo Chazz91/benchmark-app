@@ -48,9 +48,6 @@ export default function NavBar() {
             ))}
             {role === 'ADMIN' && (
               <>
-                <Link href="/admin/compliance" className={linkClass('/admin/compliance')}>
-                  Compliance
-                </Link>
                 <Link href="/admin/import" className={linkClass('/admin/import')}>
                   Import
                 </Link>
